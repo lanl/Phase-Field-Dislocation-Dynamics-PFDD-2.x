@@ -18,9 +18,11 @@ Some related references including details about new features are:
 
 3. Fey, L. T., Hunter, A., & Beyerlein, I. J. (2022). Phase-field dislocation modeling of cross-slip. Journal of Materials Science, 1-15. https://doi.org/10.1007/s10853-021-06716-1
 
+PFDD relies on a Fast Fourier Transform (FFT), which is built separately and not included in PFDD. Any FFT solver can be employed, but as posted in the repo the current version is set-up to use [FFTW 2.1.5](https://www.fftw.org/download.html).
+
 # Copyright
 © 2022. Triad National Security, LLC. All rights reserved.
 This program was produced under U.S. Government contract 89233218CNA000001 for Los Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC for the U.S. Department of Energy/National Nuclear Security Administration. All rights in the program are reserved by Triad National Security, LLC, and the U.S. Department of Energy/National Nuclear Security Administration. The Government is granted for itself and others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide license in this material to reproduce, prepare derivative works, distribute copies to the public, perform publicly and display publicly, and to permit others to do so.
 
 # License
-PFDD is distributed as open source software available under a [GPL3 license](LICENSE.md).
+PFDD is distributed as open source software available under a [GPL3 license](GPLv3.pdf).
