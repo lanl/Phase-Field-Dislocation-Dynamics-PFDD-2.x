@@ -1,0 +1,40 @@
+# PFDD tests on generic lattice
+seed             576
+#app_style        fcc core_energy 1
+#app_style        2d core_energy 1
+app_style        2d-bcc-1lOrtho core_energy 1
+#app_style        3d-2slip core_energy 1
+#app_style        3d2s2lOrtho core_energy 1
+#app_style        3d2sStraightOrtho core_energy 1
+#app_style        3d2sStraightNonOrtho core_energy 1
+
+#fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 0 y 0 1 1 z 1 0 1
+#fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 0 y 0 1 1 z 1 0 1
+#fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 2 y 1 1 0 z 1 1 1
+#fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 1 y 1 -1 1 z 1 1 -1
+#fft_style       fftw_slab pbc 1 1 1 mode 1 #primitive x 1 1 0 y 0 1 1 z 1 0 1
+#fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 -1 0 y 1 1 -2 z 1 1 1 # fcc orthogonal
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 -2 y 1 1 1 z 1 -1 0 # bcc orthogonal
+dimension        3
+lattice         sc/6n 1
+region          box block 0 64 0 64 0 64
+create_box       box
+create_sites     box
+#set              site value 1
+material        preset Ni
+solve_style      GL max_iter 5000 tol 1e-4
+
+diag_style      strain
+diag_style      stress
+
+temperature	     700
+scale           1.0 1.0 1.0
+#sigma       initial 0.0 0.0 0.0 0.0 -0.005 -0.005 delta 0.0 0.0 0.0 0.0 0.0 0.0
+sigma       initial 0.0 0.0 0.0 0.0 0.0 0.0 delta 0.0 0.0 0.0 0.0 0.0 0.0
+
+#stats		1.0e-8 logfreq 10 10.0
+stats		1.0e-8
+#dump            1 text 50 PFDD-fcc-perfect.dump x y z xir1 xii1 xir2 xii2 xir3 xii3 xir4 xii4 xir5 xii5 xir6 xii6 xir7 xii7 xir8 xii8 xir9 xii9 xir10 xii10 xir11 xii11 xir12 xii12 pxx pyy pzz pxy pxz pyz exx eyy ezz exy exz eyz
+dump            1 text 100 PFDD-bcc-perfect.dump.1D-Ortho x y z xir1 xii1 pxx pyy pzz pxy pxz pyz
+#dump_modify	1 logfreq 10 10.0
+run              1

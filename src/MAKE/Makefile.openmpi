@@ -1,0 +1,91 @@
+# linux = RedHat Linux box, Intel icc, MPICH2, FFTW
+
+SHELL = /bin/sh
+
+# ---------------------------------------------------------------------
+# compiler/linker settings
+# specify flags and libraries needed for your compiler
+
+CC =		icc
+CC =		pgCC
+CC =		mpicxx
+#CCFLAGS =	-O2 \
+		-funroll-loops -fstrict-aliasing -Wall -W -Wno-uninitialized
+CCFLAGS =	-g
+#CCFLAGS =	-O3
+DEPFLAGS =	-M
+LINK =		icc
+LINK =		pgCC
+LINK =		mpicxx
+#LINKFLAGS =	-O2 \
+		-funroll-loops -fstrict-aliasing -Wall -W -Wno-uninitialized
+LINKFLAGS =	-g
+#LINKFLAGS =	-O3
+LIB =       -ldfftw_mpi -ldfftw -lm -lstdc++
+ARCHIVE =	ar
+ARFLAGS =	-rc
+SIZE =		size
+
+# ---------------------------------------------------------------------
+# LAMMPS-specific settings
+# specify settings for LAMMPS features you will use
+
+# LAMMPS ifdef options, see doc/Section_start.html
+
+PFDD_INC = -I/usr/local/include
+PFDD_LIB = -L/usr/local/lib
+
+FFTW_INC = -I/${FFTW}/include
+FFTW_LIB = -L/${FFTW}/lib
+
+
+# MPI library, can be src/STUBS dummy lib
+# INC = path for mpi.h, MPI compiler settings
+# PATH = path for MPI library
+# LIB = name of MPI library
+
+MPI_INC =
+MPI_PATH =
+MPI_LIB =
+
+# JPEG library, only needed if -DLAMMPS_JPEG listed with LMP_INC
+# INC = path for jpeglib.h
+# PATH = path for JPEG library
+# LIB = name of JPEG library
+
+JPG_INC =       
+JPG_PATH = 	
+#JPG_LIB =	/usr/local/lib/libjpeg.a
+JPG_LIB =
+
+# ---------------------------------------------------------------------
+# build rules and dependencies
+# no need to edit this section
+
+EXTRA_INC = $(PFDD_INC) $(MPI_INC) $(JPG_INC) $(FFTW_INC)
+EXTRA_PATH = $(MPI_PATH) $(JPG_PATH)
+EXTRA_LIB = $(PFDD_LIB) $(MPI_LIB) $(JPG_LIB) $(FFTW_LIB)
+
+# Link target
+
+$(EXE):	$(OBJ)
+	$(LINK) $(LINKFLAGS) $(EXTRA_PATH) $(OBJ) $(EXTRA_LIB) $(LIB) -o $(EXE)
+	$(SIZE) $(EXE)
+
+# Library target
+
+lib:	$(OBJ)
+	$(ARCHIVE) $(ARFLAGS) $(EXE) $(OBJ)
+
+# Compilation rules
+
+%.o:%.cpp
+	$(CC) $(CCFLAGS) $(EXTRA_INC) -c $<
+
+%.d:%.cpp
+	$(CC) $(CCFLAGS) $(EXTRA_INC) $(DEPFLAGS) $< > $@
+
+# Individual dependencies
+
+DEPENDS = $(OBJ:.o=.d)
+include $(DEPENDS)
