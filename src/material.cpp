@@ -95,6 +95,45 @@ Material::Material(PFDD_C *pfdd_p, int narg, char **arg, int N1, int N2, int N3,
       Cn = atof(arg[iarg+1]);
       iarg+=2;
     }
+    else if (strcmp(arg[iarg],"dlayer") == 0) {
+      dlayer = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"Nlayers") == 0) {
+      Nlayers = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"Ngrains") == 0) {
+      Ngrains = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"Rgrain") == 0) {
+      Rgrain = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"alpha_rho") == 0) {
+      alpha_resistivity = atof(arg[iarg+1]);
+      alpha_mfpel = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"pinterface") == 0) {
+      pinterface = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"rho_disloc") == 0) {
+      rho_disloc = atof(arg[iarg+1]); // TODO: will be removed in favor of automatic determination later
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"beta_disloc") == 0) {
+      beta_disloc = atof(arg[iarg+1]);
+      iarg+=2;
+    }
+    else if (strcmp(arg[iarg],"El") == 0) {
+      El[0] = atof(arg[iarg+1]); // set external electric field (required for conductivity calculations)
+      El[1] = atof(arg[iarg+2]);
+      El[2] = atof(arg[iarg+3]);
+      iarg+=4;
+    }
     else if (strcmp(arg[iarg],"preset") == 0) {
       set_constants(arg[iarg+1]);
       iarg+=2;
@@ -152,6 +191,13 @@ void Material::set_constants(const char *style)
 
    isf = 144.5E-3;  //25.0E-3;
    usf = 289.0E-3; //270.0E-3;
+   
+   condsigma = 1.43e7;
+   mfpel = 5.87e-9; // mean free path of electrons
+   alpha_resistivity = 0.006; // change in electrical resistivity per degree Kelvin close to 300K
+   alpha_mfpel = 0.006; // change in mean free path with temperature
+   Rgrain = 0.19; // model parameter: reflection of electrons at grain boundaries
+   beta_disloc = 10.e-25; // electric resitivity per unit dislocation density [Ohm m^3]
 
  }
  else if (strcmp(style,"Al") == 0) {
@@ -170,6 +216,13 @@ void Material::set_constants(const char *style)
 
    isf = 140.2E-3;
    usf = 177.0E-3;
+   
+   condsigma = 3.77e7;
+   mfpel = 18.9e-9; // mean free path of electrons
+   alpha_resistivity = 0.00429; // change in electrical resistivity per degree Kelvin close to 300K
+   alpha_mfpel = 0.00429; // change in mean free path with temperature
+   Rgrain = 0.17; // model parameter: reflection of electrons at grain boundaries
+   beta_disloc = 1.5e-25; // electric resitivity per unit dislocation density [Ohm m^3]
  }
  else if (strcmp(style,"Au") == 0) {
 
@@ -188,6 +241,13 @@ void Material::set_constants(const char *style)
 
    isf = 27.9E-3; //37.0E-3;
    usf = 66.5E-3;
+   
+   condsigma = 4.11e7;
+   mfpel = 37.7e-9; // mean free path of electrons
+   alpha_resistivity = 0.0034; // change in electrical resistivity per degree Kelvin close to 300K
+   alpha_mfpel = 0.0034; // change in mean free path with temperature
+   Rgrain = 0.17; // model parameter: reflection of electrons at grain boundaries
+   beta_disloc = 2.6e-25; // electric resitivity per unit dislocation density [Ohm m^3]
  }
  else if (strcmp(style,"Cu") == 0) {
    a = 3.64E-10; //meters
@@ -205,6 +265,14 @@ void Material::set_constants(const char *style)
 
    isf = 38.5E-3;
    usf = 163.7E-3;
+   
+   condsigma = 5.95e7; // 5.96e7; // conductivity in SI units, redefine epsilonzero to use other units
+   // conversion: 100% IACS (International Annealed Copper Standard) conductivity = 5.80e7 S/m (siemens per metre) in SI units
+   alpha_resistivity = 0.00385; // change in electrical resistivity per degree Kelvin close to 300K
+   mfpel = 39.9e-9; // mean free path of electrons
+   alpha_mfpel = 0.00385; // change in mean free path with temperature
+   Rgrain = 0.24; // model parameter: reflection of electrons at grain boundaries
+   beta_disloc = 1.3e-25; // electric resitivity per unit dislocation density; some authors assume 2e-25 Ohm m^3
  }
  else if (strcmp(style,"Pd") == 0) {
    a = 3.950E-10;
@@ -239,6 +307,13 @@ void Material::set_constants(const char *style)
 
    isf = 17.8E-3; //37.0E-3;
    usf = 100.4E-3;
+   
+   condsigma = 6.3e7;
+   mfpel = 53.3e-9; // mean free path of electrons
+   alpha_resistivity = 0.0038; // change in electrical resistivity per degree Kelvin close to 300K
+   alpha_mfpel = 0.0038; // change in mean free path with temperature
+   Rgrain = 0.24; // model parameter: reflection of electrons at grain boundaries
+   beta_disloc = 1.9e-25; // electric resitivity per unit dislocation density [Ohm m^3]
  }
  else if (strcmp(style,"Pt") == 0) {
    a = 3.98E-10;
@@ -625,6 +700,13 @@ void Material::set_constants(const char *style)
    mu = 70.67E9;
    young = 189.24E9;
    usf = 950.21E-3;
+   
+   condsigma = 7.634e6; // conductivity in SI units, redefine epsilonzero to use other units
+   alpha_resistivity = 0.0035; // change in electrical resistivity per degree Kelvin close to 300K
+   mfpel = 3.21e-9; // mean free path of electrons (Gall, JAP 2020)
+   alpha_mfpel = 0.0035; // change in mean free path with temperature, estimate using CRC handbook
+   Rgrain = 0.1; // model parameter: reflection of electrons at grain boundaries; TODO: find correct value (0.1 is a place holder to avoid nan)
+   //~ beta_disloc = 0.0e-25; // electric resitivity per unit dislocation density [Ohm m^3]
 
    //  Estimate the Ta USFE (MRSSP angle, tau)--SNAP
    //fitted angle: -30^o to 30^o, stresses 0.25, 0.5, 0.75GPa
@@ -634,13 +716,49 @@ void Material::set_constants(const char *style)
    c_slope = -4.16536 ;
    c_b = 1133.961364 ;
  }
+ else if (strcmp(style,"W") == 0) {
+   a = 3.1652E-10;
+   b = sqrt(3.0)*(a)/2.0;
+   mu = 160.6E9;
+   young = 411.1E9;
+   usf = 1850.E-3; // approx. value within range reported in https://doi.org/10.1016/j.commatsci.2021.110364
+   
+   condsigma = 1.855e7; // conductivity in SI units, redefine epsilonzero to use other units
+   alpha_resistivity = 0.0042; // change in electrical resistivity per degree Kelvin close to 300K
+   mfpel = 15.5e-9; // mean free path of electrons
+   alpha_mfpel = 0.0042; // change in mean free path with temperature, estimate using CRC handbook
+   Rgrain = 0.42; // model parameter: reflection of electrons at grain boundaries (Choi 2014)
+   beta_disloc = 7.5e-25; // electric resitivity per unit dislocation density, taken from Brown 1977; Basinski, Dugdale, and Howie 1963 report 19e-25
 
+ }
+ else if (strcmp(style,"Cr") == 0) {
+   a = 2.8848E-10;
+   b = sqrt(3.0)*(a)/2.0;
+   mu = 115.4E9;
+   young = 279.3E9;
+   //~ usf = 0.E-3;
+   
+   condsigma = 7.937e6; // conductivity in SI units, redefine epsilonzero to use other units
+   alpha_resistivity = 0.003; // change in electrical resistivity per degree Kelvin close to 300K
+   mfpel = 2.9e-9; // mean free path of electrons, taken from Idczak and Koscielniak Optica Applicata, Vol. X V I11, No. 2, 1988
+   alpha_mfpel = 0.003; // change in mean free path with temperature, estimate using CRC handbook
+   Rgrain = 0.1; // model parameter: reflection of electrons at grain boundaries; TODO: find correct value (0.1 is a place holder to avoid nan)
+   //~ beta_disloc = 0.0e-25; // electric resitivity per unit dislocation density [Ohm m^3]
+
+ }
  else if (strcmp(style,"Fe") == 0) {
   a = 2.8665E-10;
   b = sqrt(3.0)*(a)/2.0;
   mu = 87.2796E9;
   young = 225.1814E9;
   usf = 744.14E-3;
+
+   condsigma = 1.041e6; // conductivity in SI units, redefine epsilonzero to use other units
+   alpha_resistivity = 0.005; // change in electrical resistivity per degree Kelvin close to 300K
+   mfpel = 40.0e-9; // mean free path of electrons
+   alpha_mfpel = 0.005; // change in mean free path with temperature, estimate using CRC handbook
+   Rgrain = 0.1; // model parameter: reflection of electrons at grain boundaries; TODO: find correct value (0.1 is a place holder to avoid nan)
+   beta_disloc = 10.e-25; // electric resitivity per unit dislocation density, taken from Brown 1977;  Basinski, Dugdale, and Howie 1963 report 20e-25
 
   // Estimate the Fe USFE (MRSSP angle, tau)-- EAM, Proville
   //fitted angle: -30^o to 30^o, stresses 0.1, 0.25, 0.4 GPa
@@ -658,6 +776,12 @@ void Material::set_constants(const char *style)
     young = 110.33E9;
     usf = 676.775E-3;
     An = usf;
+   
+    condsigma = 6.334e6; // conductivity in SI units, redefine epsilonzero to use other units
+    alpha_resistivity = 0.00318; // change in electrical resistivity per degree Kelvin close to 300K
+    mfpel = 2.0e-9; // mean free path of electrons
+    alpha_mfpel = 0.00318; // change in mean free path with temperature
+    Rgrain = 0.45; // model parameter: reflection of electrons at grain boundaries
   }
   else if (strcmp(style,"Mo") ==  0){
     a=3.16E-10;

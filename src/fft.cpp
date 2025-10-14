@@ -47,8 +47,12 @@ FFT::FFT(PFDD_C *pfdd_p, int narg, char **arg) : Pointers(pfdd_p)
 
   nx = ny = nz = 0;
   norder = 1;
+  condnorder = 1;
+  conductivity = 0;
   xi = NULL;
   xi_sum = NULL;
+  
+  condxi = NULL;
 
   fx = fy = fz = NULL;
   f = r = NULL;
@@ -67,7 +71,13 @@ FFT::FFT(PFDD_C *pfdd_p, int narg, char **arg) : Pointers(pfdd_p)
   box_exist = 0;
 
   lattice = NULL;
+  //~ for (int i=0;i<5;i++) {material[i] = NULL;};
   material = NULL;
+  materialA = NULL;
+  materialB = NULL;
+  materialC = NULL;
+  materialD = NULL;
+  materialE = NULL;
   nregion = maxregion = 0;
   regions = NULL;
 
@@ -209,8 +219,30 @@ void FFT::set_lattice(int narg, char **arg)
 
 void FFT::set_material(int narg, char **arg)
 {
-  if (material) delete material;
-  material = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+  //~ if (material) delete material;
+  if (Nmaterials == 0) {
+    materialA = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+    material = materialA;
+  }
+  else if (Nmaterials == 1) {
+    materialB = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+    //~ material = materialB;
+  }
+  else if (Nmaterials == 2) {
+    materialC = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+    //~ material = materialC;
+  }
+  else if (Nmaterials == 3) {
+    materialD = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+    //~ material = materialD;
+  }
+  else if (Nmaterials ==4 ) {
+    materialE = new Material(pfdd_p,narg,arg,nx,ny,nz,app->slip_systems);
+    //~ material = materialE;
+  }
+  if (Nmaterials < 5) {
+    Nmaterials += 1; // increase the counter 
+  }
 }
 
 /* ----------------------------------------------------------------------

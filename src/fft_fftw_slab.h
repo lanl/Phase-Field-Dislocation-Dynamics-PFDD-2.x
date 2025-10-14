@@ -33,6 +33,7 @@ namespace PFDD_NS {
 
     fftwnd_mpi_plan plan, iplan;
     fftw_complex *data_fftw, *work, *data_real, *temp_data, *data_core, *data_strain, *work_strain;
+    fftw_complex *conddata_fftw, *conddata_real, *conddata_bpart, *condtemp_data, *jcurrent, *jcurrent_fftw, *javerage;
 
     FFTW_Slab(class PFDD_C *, int, char **);
     ~FFTW_Slab();
@@ -52,8 +53,11 @@ namespace PFDD_NS {
 
     void init_loop();
     void internal_energy();
+    void divcurrent();
     void update_order_parameter();
+    void update_conduct_order_param();
     void prepare_next_itr();
+    void prepare_next_conditr();
     void temp_stor_data();
     void reset_data();
     void stressfree_strain();
@@ -76,9 +80,11 @@ namespace PFDD_NS {
     void prep_forward();
     void forward_mode1();
     void forward_mode2();
+    void forwardcond();
     void prep_backward();
     void backward_mode1();
     void backward_mode2();
+    void backwardcond();
     void initial_sxtal_mode1();
     void initial_sxtal_NoLoop();
     void initial_sxtal_mode2();

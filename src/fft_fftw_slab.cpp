@@ -143,6 +143,13 @@ void FFTW_Slab::init()
     slip_systems = app->slip_systems;
     num_planes = app->num_planes;
     dimension = app->dimension;
+    memory->create(conddata_fftw,total_local_size,"conddata_fftw");
+    memory->create(conddata_real,total_local_size,"conddata_real");
+    memory->create(conddata_bpart,total_local_size,"conddata_bpart");
+    memory->create(condtemp_data,total_local_size,"condtemp_data");
+    memory->create(jcurrent,total_local_size,"jcurrent");
+    memory->create(jcurrent_fftw,total_local_size,"jcurrent_fftw");
+    memory->create(javerage,dimension,"javerage");
     memory->create(data_fftw,total_local_size*slip_systems,"data_fftw");
     memory->create(data_real,total_local_size*slip_systems,"data_real");
     memory->create(temp_data,total_local_size*slip_systems,"temp_data");
@@ -152,12 +159,17 @@ void FFTW_Slab::init()
     memory->create(data_strain,total_local_size*dimension*dimension,"data_strain");
 
     memory->create(xi,norder,2.0*slip_systems*local_x*local_y*local_z,"xi");
+    memory->create(condxi,condnorder,2*local_x*local_y*local_z,"condxi"); // 1 scalar order parameter for charge density
     memory->create(xi_sum,norder,2.0*local_x*local_y*local_z,"xi_sum");
     for(int i=0; i<norder; i++){
       for(int j=0; j<2.0*slip_systems*local_x*local_y*local_z; j++)
       xi[i][j] = 0;
       for(int j=0; j<2.0*local_x*local_y*local_z; j++)
-      xi_sum[i][j] = 0.0;
+        xi_sum[i][j] = 0.0;
+    }
+    for(int i=0; i<condnorder; i++){
+      for(int j=0; j<local_x*local_y*local_z; j++)
+        condxi[i][j] = 0;
     }
     memory->create(xo,slip_systems*local_x*local_y*local_z,"xo");
     memory->create(fx,local_x*local_y*local_z,"fx");
@@ -1682,6 +1694,52 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
           }
         }
 
+		/* -----------------------------------------------------------------------
+		   Compute Fourier space pieces of divergence of electric current from according order parameter
+		   ---------------------------------------------------------------------*/
+		void FFTW_Slab::divcurrent()
+		{
+		  int lN1 = local_x;
+		  int N2 = local_y;
+		  int N3 = local_z;
+		  int index=0;
+		  int nsize = lN1*N2*N3;
+		  
+		  double fk[dimension];
+		  double fk2;
+		  
+		  //~ double epsilonzero = material->epsilonzero;
+		  double ElEx[3];
+		  //~ double condsigma = material->condsigma;
+		  //~ double condsigma_array[lN1];
+		  
+		  for (int l=0;l<dimension;l++) ElEx[l] = material->El[l];
+		  
+		  for (int i=0; i<lN1*N2*N3; i++){
+			conddata_bpart[i].re = 0;
+			conddata_bpart[i].im = 0;
+			jcurrent_fftw[i].re = 0; // omit external part condsigma*ElEx here; // TODO: make this a vector
+			jcurrent_fftw[i].im = 0;
+		  }
+		  
+		  for(int i=0;i<lN1;i++)
+			for(int j=0;j<N2;j++)
+			  for(int k=0;k<N3;k++){
+				index  = i*N2*N3 + j*N3 + k;
+				fk[0] = fx[index];
+				fk[1] = fy[index];
+				fk[2] = fz[index];
+				fk2 = fk[0]*fk[0]+fk[1]*fk[1]+fk[2]*fk[2];
+				if (fk2>0.)
+				{
+				// calculate for y-direction for now; TODO: generalize by turning scalars into vectors and tensors
+				jcurrent_fftw[index].re -= conddata_fftw[index].im*fk[1]/fk2; // tilde{a}_j in working notes
+				jcurrent_fftw[index].im += conddata_fftw[index].re*fk[1]/fk2;
+				conddata_bpart[index].re += conddata_fftw[index].re*fk[1]*fk[1]/fk2; // tilde{b}_{ij} in working notes
+				conddata_bpart[index].im += conddata_fftw[index].im*fk[1]*fk[1]/fk2; // TODO: include non-x components
+			  }}
+		}
+
         /* -----------------------------------------------------------------------
         Update order parameter
         ---------------------------------------------------------------------*/
@@ -1730,6 +1788,50 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
           MPI_Allreduce(&xinormlocal, &xinorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
           xinorm = sqrt(xinorm);
         }
+		/* -----------------------------------------------------------------------
+		   Update conductivity order parameter
+		   ---------------------------------------------------------------------*/
+		void FFTW_Slab::update_conduct_order_param()
+		{
+		  int lN1 = local_x;
+		  int N1 = nx;
+		  int N2 = local_y;
+		  int N3 = local_z;
+		  int index=0, na=0, na0=0, na1=0;
+		  double condxinormlocal=0.0;           // stores the norm of the increment of condxi
+		  double condxirep=0.0, condxiimp=0.0;      // store previous re and im values of condxi
+		  double condxi_ave=0.0;                // Local average of the conduct. order parameter
+		  int nsize = N1*N2*N3;
+
+		  //~ for(int isa=0;isa<NS;isa++){
+			for(int i=0;i<lN1;i++){
+			  for(int j=0;j<N2;j++){
+			for(int k=0;k<N3;k++){
+			  na0 = 2*(i*N2*N3 + j*N3 + k); // + isa*lN1*N2*N3);
+			  index = i*N2*N3 + j*N3 + k; // + isa*lN1*N2*N3;
+			  na1 = na0+1;
+
+			  //Ginzburg-Landau Equation for real and imag parts
+
+			  //if(xo[index] == 0.0){ // do we need this??
+				condxirep = condxi[0][na0];
+				condxiimp = condxi[0][na1];
+				// assuming for now that -partial_i(sigma_ij E^ex_j)=0 and partial_i sigma_ij=0
+				// and also take same time step size as for dislocation sub-problem (may generalize as needed)
+				condxi[0][na0] = condxi[0][na0] -(1e-22*(app->timestep)*(conddata_real[index].re/(nsize))); // timestep is set to 1 in app, need smaller here
+				condxi[0][na1] = condxi[0][na1] -(1e-22*(app->timestep)*(conddata_real[index].im/(nsize)));
+			  //}
+			  condxinormlocal += (condxi[0][na0] - condxirep)*(condxi[0][na0] - condxirep) +
+				(condxi[0][na1] - condxiimp)*(condxi[0][na1] - condxiimp);
+			  condxi_ave += condxi[0][na0];
+			}
+			  }
+			}
+		  //~ }
+		  MPI_Allreduce(&condxi_ave, &condxiave, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		  MPI_Allreduce(&condxinormlocal, &condxinorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		  condxinorm = sqrt(condxinorm);
+		}
         /* ------------------------------------------------------------------
         Prepares the next iteration
         ------------------------------------------------------------------ */
@@ -1758,6 +1860,31 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
             }
           }
         }
+		/* ------------------------------------------------------------------
+		   Prepares the next conductivity iteration
+		   ------------------------------------------------------------------ */
+		void FFTW_Slab::prepare_next_conditr()
+		{
+		  int lN1 = local_x;
+		  int N1 = nx;
+		  int N2 = local_y;
+		  int N3 = local_z;
+		  int index=0, na=0, na0=0, na1=0;
+
+			for(int i=0;i<lN1;i++){
+			  for(int j=0;j<N2;j++){
+			for(int k=0;k<N3;k++){
+			  na0 = 2*(i*N2*N3 + j*N3 + k);
+			  index = i*N2*N3 + j*N3 + k;
+			  //~ na = 2*(i*N2*N3 + j*N3 + k);
+			  na1 = na0+1;
+			  conddata_fftw[index].re = condxi[0][na0];
+			  conddata_fftw[index].im = condxi[0][na1];
+
+			  }
+			}
+		  }
+		}
         /* -----------------------------------------------------------------------
         temporary stores data_fftw
         ---------------------------------------------------------------------*/
@@ -1866,6 +1993,19 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
           }
         }
 
+		/* -----------------------------------------------------------------------
+		   forward FFT - conductivity order parameter
+		   ---------------------------------------------------------------------*/
+		void FFTW_Slab::forwardcond()
+		{
+		  int lN1 = local_x;
+		  int N2 = local_y;
+		  int N3 = local_z;
+
+		  fftwnd_mpi(plan, 1, conddata_fftw, work, FFTW_NORMAL_ORDER);
+		  //~ fftwnd_mpi(plan, 1, jcurrent, work, FFTW_NORMAL_ORDER); // don't need this
+		}
+
         /* -----------------------------------------------------------------------
         backward FFT
         ---------------------------------------------------------------------*/
@@ -1910,6 +2050,144 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
             }
           }
         }
+
+		/* -----------------------------------------------------------------------
+		   backward FFT - conductivity order parameter, and assemble parts in real space
+		   ---------------------------------------------------------------------*/
+		void FFTW_Slab::backwardcond()
+		{
+		  int lN1 = local_x;
+		  int N2 = local_y;
+		  int N3 = local_z;
+		  int index;
+		  int nsize = lN1*N2*N3;
+		  double epsilonzero = material->epsilonzero;
+		  double condsigma=0, rhointerface=0, rhograin=0, rhodislocation=0;
+		  double condsigma_array[N2];
+		  double lam = 0.; // mean free path of electrons
+		  //~ double d0 = 50e-9; // length scale, e.g. average layer thickness
+		  double Vf = 0.; // volume fraction of materialB (calculated below)
+		  int Nlayers;
+		  int NgrainsA, NgrainsB, Ngrains;
+		  int dlayerA, dlayerB;
+		  double prob = 0.5; // one minus scattering probability, (1-p) (overwritten by user input)
+		  double PSprob = 0;
+		  double alphagrain = 0.;
+		  double dT = app->temperature-300;
+		  //
+		  int rank, np, slabsize;
+		  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+		  MPI_Comm_size(MPI_COMM_WORLD, &np);
+		  //~ slabsize = np*lN1;
+		  
+		  if (Nmaterials < 2) error->all(FLERR,"Need two materials for this app!");
+		  // always have an equal number of A / B layers that alternate starting with material A:
+		  Vf = (materialB->dlayer) / ((materialA->dlayer) + (materialB->dlayer));
+		  Nlayers = materialA->Nlayers;
+		  prob = 1.0-materialA->pinterface;
+		  NgrainsA = materialA->Ngrains;
+		  NgrainsB = materialB->Ngrains;
+		  // layer thicknesses in integer (corresponding to number of x-indices per layer), rounded: 
+		  dlayerB = int(round((N2/(Nlayers))*Vf));
+		  dlayerA = int(round((N2/(Nlayers))*(1.-Vf)));
+		  if (rank==0) printf("layermath: %i, %i\n",dlayerA,dlayerB);
+		  if (rank==0) printf("Ngrains: %i, %i\n",NgrainsA,NgrainsB);
+
+		  fftwnd_mpi(iplan, 1, conddata_bpart, work, FFTW_NORMAL_ORDER); // b_{ij} in notes
+		  fftwnd_mpi(iplan, 1, jcurrent_fftw, work, FFTW_NORMAL_ORDER); // a_j in notes
+		  for (int i=0;i<dimension;i++)
+		  {
+			javerage[i].re = 0;
+			javerage[i].im = 0;
+			jcurrent[i].re = 0;
+			jcurrent[i].im = 0;
+			conddata_real[i].re = 0.;
+			conddata_real[i].im = 0.;
+		  }
+		  if (rank==0) printf("\ntemperature: %f \n", dT+300);
+		  if (rank==0) printf("\nsize in y: %i Nmaterials: %i \n", N2, Nmaterials);
+		  if (rank==0) printf("materialA: conductivity = %f MS/m, ", materialA->condsigma/1e6);
+		  if (rank==0) printf("mean-free-path = %f nm, dlayer = %f nm\n", 1.e9*materialA->mfpel, 1.e9*materialA->dlayer);
+		  if (rank==0) printf("materialB: conductivity = %f MS/m, ", materialB->condsigma/1e6);
+		  if (rank==0) printf("mean-free-path = %f nm, dlayer = %f nm\n", 1.e9*materialB->mfpel, 1.e9*materialB->dlayer);
+		  if (rank==0) printf("Nlayers: %i, Vf = %f \n",Nlayers,Vf);
+		  printf("# cpus: %i, current process #: %i\n",np,rank);
+		  
+		  for(int j=0;j<N2;j++){
+			if ((j)  % (dlayerA+dlayerB) >= dlayerA)
+			{
+			  //~ printf("Nb: %i, %i, %i, %i, %i",rank,j,(rank*np+i)  % (dlayerA+dlayerB), dlayerA, dlayerB);
+			  condsigma_array[j] = materialB->condsigma / (1. + materialB->alpha_resistivity*dT);
+			  PSprob = 2*prob/(materialB->dlayer);
+			  lam = (materialB->mfpel)/(1. + materialB->alpha_mfpel*dT); // mean free path for Nb with temperature correction
+			  // and with correction for misaligned layers (vary angles < 1/2 ~ 29 degrees):
+			  //lam = (materialB->mfpel)*(1. + exp(-(materialB->dlayer)/abs(cos(0.5*j/lN1))/(materialB->mfpel)))/(1. + materialB->alpha_mfpel*dT);
+			  alphagrain=(lam*materialB->Ngrains/materialB->dlayer)*materialB->Rgrain/(1-materialB->Rgrain);
+			  Ngrains = materialB->Ngrains;
+			  rhodislocation = materialB->beta_disloc*materialB->rho_disloc;
+			  
+			}
+			else 
+			{
+			  condsigma_array[j] = materialA->condsigma / (1. + materialA->alpha_resistivity*dT);
+			  PSprob = 4*prob*Vf/((materialA->dlayer)*(1-Vf));
+			  lam = (materialA->mfpel)/(1. + materialA->alpha_mfpel*dT); // mean free path of electrons in copper with temperature correction
+			  // and with correction for misaligned layers (vary angles < 1/2 ~ 29 degrees):
+			  //lam = (materialA->mfpel)*(1. + exp(-(materialA->dlayer)/abs(cos(0.5*j/lN1))/(materialA->mfpel)))/(1. + materialA->alpha_mfpel*dT);
+			  alphagrain=(lam*materialA->Ngrains/materialA->dlayer)*materialA->Rgrain/(1-materialA->Rgrain);
+			  Ngrains = materialA->Ngrains;
+			  rhodislocation = materialA->beta_disloc*materialA->rho_disloc;
+			}
+			if (PSprob > 0.)
+			{
+			  //condsigma = 1/((1/condsigma_array[j]) *(1 + (3./16.)*lam*PSprob));
+			  rhointerface = ((1/condsigma_array[j]) *( (3./16.)*lam*PSprob));
+			  if (Ngrains > 1)
+			  {
+				rhograin = (1/condsigma_array[j]) *(1./(1.-3.*alphagrain/2.+3.*alphagrain*alphagrain - 3.*pow(alphagrain,3.)*log(1.+1./alphagrain)) - 1.);
+				// weight the two effects by the number of interfaces occuring in the region; also add resistivity from dislocation density
+				condsigma = 1/((1/condsigma_array[j]) + (2*rhointerface + (Ngrains-1)*rhograin)/(Ngrains+1) + rhodislocation);
+			  }
+			  else
+			  {
+				rhograin=0;
+				condsigma = 1/((1/condsigma_array[j]) + rhointerface + rhodislocation);
+			  }
+			//		printf("\nlocalcond at x= %i: %f",j,condsigma);
+			}
+			else condsigma = condsigma_array[j]; // TODO: make this a tensor
+			for(int i=0;i<lN1;i++){
+			  for(int k=0;k<N3;k++){
+				index  = i*N2*N3 + j*N3 + k;
+				//~ for (int l=0;l<dimension;l++){
+				jcurrent[index].re = condsigma*(material->El[1] - jcurrent_fftw[index].re/epsilonzero); // TODO: make this a vector
+				jcurrent[index].im = - condsigma*jcurrent_fftw[index].im/epsilonzero;
+				//~ }
+				javerage[1].re += jcurrent[index].re/nsize; // average current needed for macroscopic conductivity
+				javerage[1].im += jcurrent[index].im/nsize;
+				conddata_real[index].re = (condsigma/epsilonzero)*conddata_bpart[index].re;
+				conddata_real[index].im = (condsigma/epsilonzero)*conddata_bpart[index].im;
+				if (j==0) {
+					conddata_real[index].re += (jcurrent_fftw[index].re/epsilonzero - material->El[1])*(condsigma_array[j+1]-condsigma_array[j]); // TODO: extrapolate properly at the edge
+					conddata_real[index].im += (jcurrent_fftw[index].im/epsilonzero)*(condsigma_array[j+1]-condsigma_array[j]);
+				}
+				else if (j==N2-1) {
+					conddata_real[index].re += (jcurrent_fftw[index].re/epsilonzero - material->El[1])*(condsigma_array[j]-condsigma_array[j-1]); // TODO: extrapolate properly at the edge
+					conddata_real[index].im += (jcurrent_fftw[index].im/epsilonzero)*(condsigma_array[j]-condsigma_array[j-1]);
+				}
+				else {
+					conddata_real[index].re += (jcurrent_fftw[index].re/epsilonzero - material->El[1])*(condsigma_array[j+1]-condsigma_array[j-1])/2.; // TODO: divide by delta x: find out which variable stores positions!
+					conddata_real[index].im += (jcurrent_fftw[index].im/epsilonzero)*(condsigma_array[j+1]-condsigma_array[j-1])/2.;
+				}
+			}}}
+		   
+		   conductivity = 0.;
+		   for (int l=1;l<2;l++){ // TODO: update for vector
+			 conductivity +=javerage[l].re / (double(np)*material->El[l]); // determine macroscopic conductivity per cpu (TODO: make this a tensor)
+		   }
+		   //~ conductivity = conductivity/((double)dimension);
+		   MPI_Allreduce(&conductivity, &conductivity_global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		}
 
         /* -----------------------------------------------------------------------
         Initial Crystal to nothing
@@ -2957,6 +3235,8 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
         xi[0][na0] = 1.0;
         xi_sum[0][na] = xi_sum[0][na] + xi[0][na0];
       }
+      data_fftw[index].re = xi[0][na0];
+      data_fftw[index].im = xi[0][na1];
     }
     if(me==0){
       if (logfile) fprintf(logfile,"Initial configuration of order parameters COMPLETE ...\n");

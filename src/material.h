@@ -41,6 +41,21 @@ namespace PFDD_NS {
     double b;                    // Burgers vector
     double dslip;                // interplanar distance
 
+    double condsigma; // conductivity (TODO: make this a tensor)
+    double alpha_resistivity = 0; // change in electrical resistivity per degree Kelvin above 300K (but close to it)
+    double Rgrain=0.;
+    double mfpel=1e-9; // mean free path of electrons
+    double alpha_mfpel = 0; // change in mfp of electrons with temperature
+    double dlayer=100e-9; // default average layer thickness
+    int Nlayers = 1;
+    int Ngrains = 1; // default number of grains per layer (in the transverse direction)
+    double pinterface = 0.5; // default scattering probablility at an interface
+    double epsilonzero=8.8541878128e-12; // vacuum permittivity in SI units according to CRC handbook
+    double El[3]; // applied external electric field
+    double beta_disloc = 0; // electric resitivity per unit dislocation density
+    double rho_disloc = 0; // dislocation density, read from input file for now, 
+    // but will eventually be automatically determined from the dislocations placed in the simulation box (TODO)
+    
     double a_slope,a_b,b_b,c_slope,c_b; // paramters to determine USFE(X,tau)
     Material(class PFDD_C *, int, char **, int, int, int, int);
     ~Material();

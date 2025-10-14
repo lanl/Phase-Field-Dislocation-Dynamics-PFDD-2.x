@@ -17,7 +17,7 @@ app_style        2d-bcc-1lOrtho core_energy 1
 fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 1 -2 y 1 1 1 z 1 -1 0 # bcc orthogonal
 dimension        3
 lattice         sc/6n 1
-region          box block 0 64 0 64 0 64
+region          box block 0 32 0 32 0 32
 create_box       box
 create_sites     box
 #set              site value 1

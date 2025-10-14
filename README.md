@@ -18,6 +18,10 @@ Some related references including details about new features are:
 
 3. Fey, L. T., Hunter, A., & Beyerlein, I. J. (2022). Phase-field dislocation modeling of cross-slip. Journal of Materials Science, 1-15. https://doi.org/10.1007/s10853-021-06716-1
 
+4. Blaschke, D. N., Miller, C., Mier, R., Osborn, C., Thomas, S. M., Tegtmeier, E. L., Winter, W. P., Carpenter, J. S., & Hunter, A. (2022). Predicting electrical conductivity in Cu/Nb composites: a combined model-experiment study. Journal of Applied Physics, 132, 045105. https://doi.org/10.1063/5.0096880 ([arXiv:2204.03777](https://www.arxiv.org/abs/2204.03777)).
+
+5. Blaschke, D. N., Carpenter, J. S., & Hunter, A. (2024). Predicting electrical conductivity in bi-metal composites. Materials 17, 5049. https://doi.org/10.3390/ma17205049 ([arXiv:2409.04655](https://arxiv.org/abs/2409.04655)).
+
 PFDD relies on a Fast Fourier Transform (FFT), which is built separately and not included in PFDD. Any FFT solver can be employed, but as posted in the repo the current version is set-up to use [FFTW 2.1.5](https://www.fftw.org/download.html).
 
 # Copyright
@@ -26,3 +30,8 @@ This program was produced under U.S. Government contract 89233218CNA000001 for L
 
 # License
 PFDD is distributed as open source software available under a [GPL3 license](GPLv3.pdf).
+
+C22019
+
+https://doi.org/10.11578/dc.20231117.5
+

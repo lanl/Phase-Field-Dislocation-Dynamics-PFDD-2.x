@@ -44,12 +44,18 @@ namespace PFDD_NS {
     int mode;                   // Flag for the way the data is organized for the fft calculation
     int norder;                 // # of order parameters
     double **xi;             // order parameter for the phase field (xi)
+    double **condxi;             // order parameter for the charge density phase field (condxi)
     double **xi_sum;             // order parameter for the phase field NOT CLEAR (xi_sum)
     double *xo;                 // order parameter for obstacles
     double xinorm;              // norm of the change in xi
     double ximin;               //minimum order parameter in the slip plane i == 0
     double xiave;               // Average order parameter
     double obsden;              // obstacle density
+    
+    int condnorder;           // # of order parameters for charge density
+    double condxinorm;              // norm of the change in condxi
+    double condxiave;               // Average charge density order parameter (DO WE NEED THIS?)
+    double conductivity_global;  // calculated conductivity
 
     double *fx;                  // 1D array with all the frequencies in x
     double *fy;                  // 1D array with all the frequencies in y
@@ -75,6 +81,8 @@ namespace PFDD_NS {
     double *df3core;            // derivative of the gamma surface in 3
     double *dE_core;            // sum of the derivatives of the gamma surface
     double E_core;              // core energy
+    
+    double conductivity;        // TODO: make this a tensor
 
     double *delta;              // 1D array for order paramter (projected)
     double *ddelta;             // 1D array for gradient of delta along x
@@ -116,7 +124,14 @@ namespace PFDD_NS {
     int local_z;                // # of local grid points in z
 
     class Lattice *lattice;                  // user-defined lattice
-    class Material *material;                  // user-defined material
+    //~ class Material *material[5] {pfdd_p, pfdd_p, pfdd_p, pfdd_p, pfdd_p};            // user-defined materials (max: 5)
+    class Material *material;            // user-defined material, always points to last one defined
+    class Material *materialA;
+    class Material *materialB;
+    class Material *materialC;
+    class Material *materialD;
+    class Material *materialE;
+    int Nmaterials=0;        // number of materials read from file
 
     int nregion;                             // # of defined Regions
     int maxregion;                           // max # list can hold
@@ -155,8 +170,11 @@ namespace PFDD_NS {
     virtual void stiffness() = 0;
     virtual void greens_function() = 0;
     virtual void internal_energy() = 0;
+    virtual void divcurrent() = 0;
     virtual void update_order_parameter() = 0;
+    virtual void update_conduct_order_param() = 0;
     virtual void prepare_next_itr() = 0;
+    virtual void prepare_next_conditr() = 0;
     virtual void temp_stor_data() = 0;
     virtual void reset_data() = 0;
     virtual void Bmatrix() = 0;
@@ -165,9 +183,11 @@ namespace PFDD_NS {
     virtual void prep_forward() = 0;
     virtual void forward_mode1() = 0;
     virtual void forward_mode2() = 0;
+    virtual void forwardcond() = 0;
     virtual void prep_backward() = 0;
     virtual void backward_mode1() = 0;
     virtual void backward_mode2() = 0;
+    virtual void backwardcond() = 0;
     virtual void initial_sxtal_mode1() = 0;
     virtual void initial_sxtal_mode2() = 0;
     virtual void initial_sxtal_NoLoop() = 0;
