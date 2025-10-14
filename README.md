@@ -35,3 +35,49 @@ C22019
 
 https://doi.org/10.11578/dc.20231117.5
 
+# Compiling
+
+Several Makefiles are distributed in the folder src/MAKE/. Depending on the user's system, minor modifications may be necessary.
+For example, to compile on a linux machine using openmpi (after installing fftw 2.1.5, openmpi, and a C-shell such as csh or tcsh), run </br>
+cd src
+</br>
+make openmpi
+</br>
+If fftw is not found or in an unusual location, edit src/MAKE/Makefile.openmpi and add a line pointing to it (such as FFTW = $(HOME)/fftw2) above the line FFTW_INC = -I/${FFTW}/include
+</br>
+The binary will be located in the src/ folder.
+
+Example Debian based Linux distribution:
+</br>
+apt install libopenmpi-dev fftw-dev fftw2 csh
+</br>
+Note, the version of fftw2 shipped with Debian omits the 'd' prefix in the library names for double precision and the following edits are necessary if this version of fft2 is to be used:
+</br>
+in src/fft_fftw_slap.h and src/fft_fftw_slap.h.cpp replace #include "dfftw_mpi.h" with #include "fftw_mpi.h"
+</br>
+and in src/MAKE/Makefile.openmpi replace
+</br>
+LIB = -ldfftw_mpi -ldfftw -lm -lstdc++
+</br>
+with
+</br>
+LIB = -lfftw_mpi -ldfftw -lm -lstdc++
+</br>
+then</br>
+cd src
+</br>
+make openmpi
+
+# Running
+
+A few example input files are provided in the src folder, prefixed by "in."
+</br>
+To run an openmpi build on just one cpu with default settings on a linux machine call:</br>
+pfdd_openmpi -in <inputfile\>
+</br>
+Parallel runs must use n cpus where the number of regions defined in the inputfile divided by n is an integer, e.g.
+</br>
+mpirun -n 4 pfdd_openmpi -in <inputfile\>
+</br>
+where the "region" command in <inputfile> has a multiple of 4 as its first entry.
+The programn's output is written to 'log.pfdd' by default unless specified otherwise via command line argument '-log <logfilename\>'.
