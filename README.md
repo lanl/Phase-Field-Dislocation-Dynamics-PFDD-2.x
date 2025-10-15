@@ -43,7 +43,7 @@ cd src
 </br>
 make openmpi
 </br>
-If fftw is not found or in an unusual location, edit src/MAKE/Makefile.openmpi and add a line pointing to it (such as FFTW = $(HOME)/fftw2) above the line FFTW_INC = -I/${FFTW}/include
+If fftw is not found or in an unusual location, edit src/MAKE/Makefile.openmpi and add a line pointing to it (such as FFTW = \$(HOME)/fftw2) above the line FFTW_INC = -I/\${FFTW}/include
 </br>
 The binary will be located in the src/ folder.
 
