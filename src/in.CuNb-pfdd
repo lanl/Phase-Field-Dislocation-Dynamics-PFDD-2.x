@@ -1,0 +1,24 @@
+# PFDD, conductivity
+seed             576
+app_style        cond100B core_energy 1
+
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x 1 0 0 y 0 1 0 z 0 0 1 # cubic
+dimension        3
+lattice         sc/6n 1
+region          box block 0 128 0 128 0 128
+create_box       box
+create_sites     box
+material       preset Cu dlayer 1.0000000000000001e-07 El 0.0 1e-12 0.0 Rgrain 0.83 Nlayers 1 Ngrains 1 rho_disloc 1e15
+material       preset Nb dlayer 1.1304347826086957e-08 Ngrains 1 rho_disloc 1e15
+solve_style      GLCond max_iter 300 tol 1e-4
+
+diag_style      strain
+diag_style      stress
+
+temperature	     300.0
+scale           1.0 1.0 1.0
+sigma       initial 0.0 0.0 0.0 0.0 0.06 0.0 delta 0.0 0.0 0.0 0.0 0.0 0.0
+
+stats		1.0e-8
+dump            1 text 50 PFDD-composite.dump x y z xir1
+run              1
