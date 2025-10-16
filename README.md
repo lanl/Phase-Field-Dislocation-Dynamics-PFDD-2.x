@@ -43,17 +43,17 @@ For example, to compile on a linux machine using openmpi (after installing fftw 
 </br>
 `make openmpi`
 </br>
-If fftw is not found or in an unusual location, edit src/MAKE/Makefile.openmpi and add a line pointing to it (such as `FFTW = $(HOME)/fftw2`) above the line `FFTW_INC = -I/${FFTW}/include`
+If fftw is not found or in an unusual location, set environment variable `FFTW` (such as `export FFTW = $(HOME)/fftw2` in bash)
 </br>
 The binary will be located in the src/ folder.
 
 Example Debian based Linux distribution:
 </br>
-`apt install libopenmpi-dev fftw-dev fftw2 csh`
+`apt install libopenmpi-dev fftw-dev fftw2 tcsh`
 </br>
 Note, the version of fftw2 shipped with Debian omits the 'd' prefix in the library names for double precision and the following edits are necessary if this version of fft2 is to be used:
 </br>
-in `src/fft_fftw_slap.h and src/fft_fftw_slap.h.cpp` replace `#include "dfftw_mpi.h"` with `#include "fftw_mpi.h"`
+in `src/fft_fftw_slab.h and src/fft_fftw_slab.cpp` replace `#include "dfftw_mpi.h"` with `#include "fftw_mpi.h"`
 </br>
 and in `src/MAKE/Makefile.openmpi` replace
 </br>
@@ -79,5 +79,5 @@ Parallel runs must use n cpus where the number of regions defined in the inputfi
 </br>
 `mpirun -n 4 pfdd_openmpi -in <inputfile>`
 </br>
-where the "region" command in <inputfile> has a multiple of 4 as its first entry.
-The programn's output is written to 'log.pfdd' by default unless specified otherwise via command line argument `-log <logfilename>`.
+where the "region" command in `<inputfile>` has a multiple of 4 as its first entry.
+The program writes a log file 'log.pfdd' by default unless specified otherwise via command line argument `-log <logfilename>`.
