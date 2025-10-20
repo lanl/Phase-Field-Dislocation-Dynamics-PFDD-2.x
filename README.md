@@ -53,7 +53,7 @@ Example Debian based Linux distribution:
 </br>
 Note, the version of fftw2 shipped with Debian omits the 'd' prefix in the library names for double precision and the following edits are necessary if this version of fft2 is to be used:
 </br>
-in `src/fft_fftw_slab.h and src/fft_fftw_slab.cpp` replace `#include "dfftw_mpi.h"` with `#include "fftw_mpi.h"`
+in `src/fft_fftw_slab.h` and `src/fft_fftw_slab.cpp` replace `#include "dfftw_mpi.h"` with `#include "fftw_mpi.h"`
 </br>
 and in `src/MAKE/Makefile.openmpi` replace
 </br>
@@ -61,7 +61,7 @@ and in `src/MAKE/Makefile.openmpi` replace
 </br>
 with
 </br>
-`LIB = -lfftw_mpi -ldfftw -lm -lstdc++`
+`LIB = -lfftw_mpi -lfftw -lm -lstdc++`
 </br>
 then</br>
 `cd src`
