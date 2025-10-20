@@ -2130,7 +2130,8 @@ void FFTW_Slab::fft_send(void *buf, int count, MPI_Datatype datatype, int dest,
 			else 
 			{
 			  condsigma_array[j] = materialA->condsigma / (1. + materialA->alpha_resistivity*dT);
-			  PSprob = 4*prob*Vf/((materialA->dlayer)*(1-Vf));
+			  //PSprob = 4*prob*Vf/((materialA->dlayer)*(1-Vf));
+			  PSprob = 2*prob/(materialA->dlayer);
 			  lam = (materialA->mfpel)/(1. + materialA->alpha_mfpel*dT); // mean free path of electrons in copper with temperature correction
 			  // and with correction for misaligned layers (vary angles < 1/2 ~ 29 degrees):
 			  //lam = (materialA->mfpel)*(1. + exp(-(materialA->dlayer)/abs(cos(0.5*j/lN1))/(materialA->mfpel)))/(1. + materialA->alpha_mfpel*dT);
