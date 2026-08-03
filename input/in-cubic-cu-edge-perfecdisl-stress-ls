@@ -1,0 +1,21 @@
+# PFDD tests on Cu with cubic lattice, edge dislocation and applied stress
+# PFDD Lippmann-Schwinger formulation (Murgas et al., 2026)
+# Please don't modify this file. Create a copy outside the pfdd folder of your code
+seed             576
+app_style       FCCEdgeCubic core_energy 1 setup SxtalCubicFCCEdge gb_energy 0
+fft_style       fftw_slab_ls pbc 1 1 1 mode 1 primitive x 1 0 0 y 0 1 0 z 0 0 1 # cubic
+dimension        3
+lattice         sc/6n 1
+region          box block 0 64 0 64 0 64
+create_box       box
+create_sites     box
+material        preset Cu aflag 1
+solve_style      GLLS max_iter 500 tol 1e-8
+diag_style      strain
+diag_style      stress
+temperature          700
+scale           0.707 0.707 0.707
+sigma           initial 0.00978 -0.00978 0.0 0.0 0.00488 -0.00488 delta 0.0 0.0 0.0 0.0 0.0 0.0
+stats           1.0e-8
+dump            1 text 1 output/sxtal-cubic-fcc-edge-l-64-iso-stress.dump x y z xir1 xii1 ddelta deltao iexx ieyy iezz iexy iexz ieyz pxx pyy pzz pxy pxz pyz
+run             1

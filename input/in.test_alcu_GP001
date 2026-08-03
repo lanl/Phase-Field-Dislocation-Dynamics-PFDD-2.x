@@ -1,0 +1,25 @@
+seed             123
+app_style        6SFCC core_energy 20 setup screwGP numphase 2
+fft_style       fftw_slab_ls pbc 1 1 1 mode 1 primitive x -1 0 -1 y -1 1 0 z 0 1 -1 #fcc nonortho
+
+dimension        3
+lattice         sc/6n 1
+region box block 0 64 0 64 0 64
+
+create_box       box
+create_sites     box
+material         preset Al aflag 1
+material2       preset Cu aflag 1 error_tol 1E-5 rflag 1 geometry 7
+solve_style      GLLS max_iter 100000 tol 1e-4
+
+diag_style      strain
+diag_style      stress
+diag_style      energy
+
+scale           1 1 1
+
+sigma     initial -0.000000 0.000000 0.000000 0.000000 0.000000 0.000000 delta -0.050000 0.050000 0.000000 0.000000 0.000000 0.00000
+stats           1.0e-8
+dump 1 text 1 dumps/alcu_6SFCC_ext7_screwGP_001_R8N4_x64y64z64_iso_Sg1SxN1E0_rss050.dump x y z xir1 xir2 xir3 xir4 xir5 xir6 dreg1 dreg2 pxx pyy pzz pxy pxz pyz exx eyy ezz exy exz eyz phase
+
+run 2

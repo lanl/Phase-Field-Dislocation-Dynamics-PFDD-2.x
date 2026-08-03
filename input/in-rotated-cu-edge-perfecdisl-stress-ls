@@ -1,0 +1,23 @@
+# PFDD tests on Cu with rotated lattice, edge dislocation and applied stress
+# PFDD Lippmann-Schwinger formulation (Murgas et al., 2026)
+# Please don't modify this file. Create a copy outside the pfdd folder of your code
+seed             576
+app_style       FCCEdgeRotated core_energy 1 setup StraightOrtho gb_energy 0
+fft_style       fftw_slab_ls pbc 1 1 1 mode 1 primitive x 1 -1 0 y 1 1 -2 z 1 1 1 # cubic
+dimension        3
+lattice         sc/6n 1
+# cubic edge dislocation
+region          box block 0 64 0 64 0 64
+create_box       box
+create_sites     box
+# Isotropic Case
+material        preset Cu aflag 1
+solve_style      GLLS max_iter 500 tol 1e-8
+diag_style      strain
+diag_style      stress
+temperature          700
+scale           1.0 1.0 1.0
+sigma           initial 0.0 0.0 0.0 0.0 0.005 0.0 delta 0.0 0.0 0.0 0.0 0.0 0.0
+stats           1.0e-8
+dump            1 text 100 output/sxtal-rotated-fcc-edge-l-64-rss-6e-2-iso-t0.dump x y z xir1 xii1 iexx ieyy iezz iexy iexz ieyz pxx pyy pzz pxy pxz pyz rpxx rpyy rpzz rpxy rpxz rpyz
+run             1

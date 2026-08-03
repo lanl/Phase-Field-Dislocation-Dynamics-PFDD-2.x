@@ -1,0 +1,26 @@
+seed             123
+#app_style        3SFCC core_energy 14 setup screwp3
+app_style        6SFCC core_energy 14 setup screwp6Obs
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x -1 0 -1 y -1 1 0 z 0 1 -1 #fcc nonortho
+
+dimension        3
+lattice         sc/6n 1
+region box block 0 128 0 128 0 128
+region intersection block 0 2 0 0 112 112
+
+create_box       box
+create_sites     box
+material         preset Cu aflag 0 omul 2.00
+solve_style GLXObs max_iter 100000 tol 1e-4
+
+diag_style      stress
+diag_style      strain
+diag_style      energy
+
+scale           1 1 1
+sigma     initial -0.000000 0.000000 0.000000 0.000000 0.000000 0.000000 delta -0.030000 0.030000 0.000000 0.000000 0.000000 0.00000
+stats           1.0e-8
+dump 1 text 1 dumps/cu_6SFCC_mul_o200_screwp_x128y128z128_aniso_Sg1SxN1E0_rss030_intersection.dump x y z xir1 xir2 xir3 xir4 xir5 xir6 dreg1 dreg2 dregp1_1 dregp1_2 dregp2_1 dregp2_2 int1 ext1 lat1 pxx pyy pzz pxy pxz pyz pxxNE pyyNE pzzNE pxyNE pxzNE pyzNE
+dump_modify 1 region intersection
+
+run 2

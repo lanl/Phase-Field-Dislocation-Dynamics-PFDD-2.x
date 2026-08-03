@@ -1,0 +1,21 @@
+# PFDD with GB as inclusion
+seed            576
+app_style       1P3SNP2 core_energy 2 setup StraightOrtho gb_energy 1
+fft_style       fftw_slab_ls pbc 1 1 1 mode 1 primitive x 1 0 0 y 0 1 0 z 0 0 1 # cubic
+dimension       3
+lattice         sc/6n 1
+region          box block 0 256 0 4 0 128
+create_box      box
+create_sites    box
+material        preset Cu aflag 1 mu 40.427e9 lambda 111.1187e9
+material2       preset Cu aflag 1 mu 29.16519e9 lambda 119.7886e9 gbe 1228E-3 gbef 0.04  error_tol 1E-5 rflag 1 geometry 4 x0 128 y0 2 z0 64 xl 7
+dislocation     geometry 4 x0 88 y0 2 z0 64 xl 50 yl -1.0
+solve_style     GLLSA max_iter 2250 tol 1e-8
+diag_style      strain
+diag_style      stress
+temperature     700
+scale           1.0 1.0 1.0
+sigma           initial 0.0 0.0 0.0 0.0 0.0 0.0062 delta 0.0 0.0 0.0 0.0 0.0 0.0
+stats           1.0e-8
+dump            1 text 25 output/Cu-lagb-1228-x256y4z128-syz-062e-4-screw-iso.dump x y z xir1 xii1 xir2 xii2 xir3 xii3 ddelta deltao iexx ieyy iezz iexy iexz ieyz pxx pyy pzz pxy pxz pyz apxz apyz
+run             1

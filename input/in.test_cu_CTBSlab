@@ -1,0 +1,25 @@
+seed             123
+app_style        6SFCC core_energy 21 setup screwp6Obs ### NEED TO SET TFLAG = 1 IN APP_6SFCC.CPP ###
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x -1 0 -1 y -1 1 0 z 0 1 -1 #fcc nonortho
+
+dimension        3
+lattice         sc/6n 1
+region box block 0 64 0 64 0 256
+region plane1 block 0 0 0 64 0 256
+region plane3 block 0 64 32 32 0 256
+
+create_box       box
+create_sites     box
+material         preset Cu aflag 0 omul 1.00
+solve_style GLXObs max_iter 10000 tol 1e-4
+
+diag_style      strain
+diag_style      stress
+
+scale           1 1 1
+sigma     initial -0.040000 0.040000 0.000000 0.000000 0.000000 0.000000 delta -0.000000 0.000000 0.000000 0.000000 0.000000 0.000000
+stats           1.0e-8
+dump 1 text 1 dumps/cu_6SFCC_mulCTB_screwp_x64y64z256_anisoctbslab_aniso_Sg1SxN1E0_rss050_plane3.dump x y z xir1 xir2 xir3 xir4 xir5 xir6 dreg1 dreg2 int1 ext1 lat1 xo1 xo4 pxx pyy pzz pxy pxz pyz
+dump_modify 1 region plane3
+
+run 1

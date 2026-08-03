@@ -1,0 +1,21 @@
+# PFDD tests on Cu with non-orthogonal lattice, screw dislocation and applied stress
+# PFDD homogeneous formulation (Koslowski et al., 2002)
+# Please don't modify this file. Create a copy outside the pfdd folder of your code
+seed             576
+app_style       FCCScrewRotated core_energy 1 setup StraightOrtho gb_energy 0
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x -1 0 1 y 1 -1 0 z 0 1 1 # rotated
+dimension        3
+lattice         sc/6n 1
+region          box block 0 64 0 64 0 64
+create_box       box
+create_sites     box
+material        preset Cu aflag 1
+solve_style      GL max_iter 500 tol 1e-8
+diag_style      strain
+diag_style      stress
+temperature          700
+scale           1.0 1.0 1.0
+sigma           initial 0.0 0.0 0.0 0.0 0.0 0.005 delta 0.0 0.0 0.0 0.0 0.0 0.0
+stats           1.0e-8
+dump            1 text 100 output/sxtal-nonorthogonal-fcc-screw-l-64-iso-t0.dump x y z xir1 xii1 ddelta deltao exx eyy ezz exy exz eyz pxx pyy pzz pxy pxz pyz apxx apyy apzz apxy apxz apyz ppxx ppyy ppzz ppxy ppxz ppyz tpxx tpyy tpzz tpxy tpxz tpyz rpxx rpyy rpzz rpxy rpxz rpyz
+run             1

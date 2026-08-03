@@ -1,0 +1,22 @@
+# PFDD tests on generic lattice test
+seed            576
+app_style       FCCScrewRotated2GB core_energy 2 setup StraightOrtho gb_energy 1
+fft_style       fftw_slab_ls pbc 1 1 1 mode 1 primitive x 1 -2 1 y 1 0 -1 z 1 1 1 # rotated
+dimension       3
+lattice         sc/6n 1
+region          box block 0 729 0 2 0 128
+create_box      box
+create_sites    box
+material        preset Cu aflag 1 mu 40.427E9 lambda 111.1187E9  C11 191.9727e9 C12 111.1187e9 C13 111.1187e9 C14 0.0 C15 0.0 C16 0.0 C22 191.9727e9 C23 111.1187e9 C24 0.0 C25 0.0 C26 0.0 C33 191.9727e9 C34 0.0 C35 0.0 C36 0.0 C44 40.427e9 C45 0.0 C46 0.0 C55 40.427e9 C56 0.0 C66 40.427e9
+material2       preset Cu aflag 1 mu 29.16519E9 lambda 119.7886E9 gbe 751e-3 gbef 0.04  error_tol 1E-5 rflag 1 geometry 41 x0 320 y0 1 z0 64 xl 7 yl 256
+material3       preset Cu aflag 1 mu 40.11756E9 lambda 112.114E9 gbe 847e-3 gbef 0.156  error_tol 1E-5 rflag 1 geometry 41 x0 192 y0 1 z0 64 xl 5 yl -256
+dislocation     geometry 4 x0 256 y0 1 z0 64 xl 100 yl -1.0
+solve_style     GLLSA max_iter 7500 tol 1e-8
+diag_style      strain
+diag_style      stress
+temperature     700
+scale           1.0 1.0 1.0
+sigma       	initial 0.0 0.0 0.0 0.0 0.0 0.0105 delta 0.0 0.0 0.0 0.0 0.0 0.0
+stats           1.0e-8
+dump            1 text 50 output/Cu-2GB-x512y2z128-syz-105e-4-screw-iso.dump x y z phase xir1 xii1 xir2 xii2 xir3 xii3 ddelta deltao iexx ieyy iezz iexy iexz ieyz pxx pyy pzz pxy pxz pyz rpxx rpyy rpzz rpxy rpxz rpyz
+run             1

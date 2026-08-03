@@ -1,0 +1,35 @@
+seed             123
+app_style        FCC6TestKMC core_energy 14 setup screwp6Obs
+fft_style       fftw_slab pbc 1 1 1 mode 1 primitive x -1 0 -1 y -1 1 0 z 0 1 -1 #fcc nonortho
+
+dimension        3
+lattice         sc/6n 1
+region box block 0 256 0 256 0 256
+region plane1 block 0 0 0 256 0 256
+region plane2 block 0 256 0 256 32 32
+region plane3 block 0 256 0 256 224 224
+
+create_box       box
+create_sites     box
+material         preset Cu aflag 0 omul 1.00 readHP activation/1D_256_Cu_NoExt_XSo175_HBo175.txt
+solve_style KMCGL max_iter 100000 tol 1e-4
+
+diag_style      strain
+diag_style      stress
+diag_style      energy
+
+temperature     600
+
+scale           1 1 1
+events          0 0 0 -0.852 1.174 -1.377 2.095 -0.670 0.821 1 # glide vxx,vyy,vzz,vxy,vyz,vxz,stress_dependence(1=True)
+events          1 0 0 -5.969 9.510 -3.465 4.361 -0.799 1.072 1 # xslip vxx,vyy,vzz,vxy,vyz,vxz,stress_dependence(1=True)
+sigma     initial -0.000000 0.000000 0.000000 0.000000 0.000000 0.00000 delta -0.040000 0.040000 0.000000 0.000000 0.000000 0.00000
+stats           1.0e-8
+dump 1 text 1000 dumps/cu_FCC6TestKMC_NoExt_mul_o175_screwp_x256y256z256_aniso_Sg1SxN1E0_T600_rss040_plane1.dump x y z dreg1 dreg2 dtkmc1 dtkmc2 xo1 xo4 nhn1 nhn2 picked1 picked2 pxx pyy pzz pxy pxz pyz pxxNE pyyNE pzzNE pxyNE pxzNE pyzNE
+dump_modify 1 region plane1
+dump 2 text 1000 dumps/cu_FCC6TestKMC_NoExt_mul_o175_screwp_x256y256z256_aniso_Sg1SxN1E0_T600_rss040_plane2.dump x y z dreg1 dreg2 dtkmc1 dtkmc2 xo1 xo4 nhn1 nhn2 picked1 picked2 pxx pyy pzz pxy pxz pyz pxxNE pyyNE pzzNE pxyNE pxzNE pyzNE
+dump_modify 2 region plane2
+dump 3 text 1000 dumps/cu_FCC6TestKMC_NoExt_mul_o175_screwp_x256y256z256_aniso_Sg1SxN1E0_T600_rss040_plane3.dump x y z dreg1 dreg2 dtkmc1 dtkmc2 xo1 xo4 nhn1 nhn2 picked1 picked2 pxx pyy pzz pxy pxz pyz pxxNE pyyNE pzzNE pxyNE pxzNE pyzNE
+dump_modify 3 region plane3
+
+run 2
