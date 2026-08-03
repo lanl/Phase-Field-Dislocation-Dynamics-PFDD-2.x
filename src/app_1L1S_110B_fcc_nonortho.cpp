@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
    ------------------------------------------------------------------------- */
 
 #include "math.h"
@@ -37,13 +28,14 @@ App1L1S110Bfccnonortho::App1L1S110Bfccnonortho(PFDD_C *pfdd_p, int narg, char **
   num_planes = 1;  // The # of plane normals has to be allocated in the constructure
                       //  fot the FFT class to be able to allocate arrays
 
-  CD = 0.5;           // Dislocation mobility
+  CD = 0.002;           // Dislocation mobility
   oflag = 1;
 
   if(setup_flag == -1)
     setup_flag = 6;
   if(core_flag == -1)
     core_flag = 1; //default to sin^2
+  nphase = 2;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -222,37 +214,19 @@ void App1L1S110Bfccnonortho::set_slip()
   s2 = sqrt(2.0);
 
   fft->xn[0][0]= 1.0/s3;
-  fft->xn[0][1]= 1.0/s3;
-  fft->xn[0][2]= 1.0/s3;
-
-  fft->xb[0][0]= 1.0/s2;
+  fft->xn[0][1]= -1.0/s3;
+  fft->xn[0][2]= -1.0/s3;
+  //edge
+  fft->xb[0][0]= -1.0/s2;
   fft->xb[0][1]= -1.0/s2;
   fft->xb[0][2]= 0.0;
 
-  // Rotation
-  // for(int i=0; i<slip_systems; i++){
-  //   xnf = (fft->xn[i][0]*fft->four[0][0] + fft->xn[i][1]*fft->four[0][1] + fft->xn[i][2]*fft->four[0][2])
-  //     /fft->normfour[0];
-  //   ynf = (fft->xn[i][0]*fft->four[1][0] + fft->xn[i][1]*fft->four[1][1] + fft->xn[i][2]*fft->four[1][2])
-  //     /fft->normfour[1];
-  //   znf = (fft->xn[i][0]*fft->four[2][0] + fft->xn[i][1]*fft->four[2][1] + fft->xn[i][2]*fft->four[2][2])
-  //     /fft->normfour[2];
+ //screw
+  //fft->xb[0][0]= 0.0;
+  //fft->xb[0][1]= 1.0/s2;
+  //fft->xb[0][2]= -1.0/s2;
 
-  //   fft->xn[i][0] = xnf;
-  //   fft->xn[i][1] = ynf;
-  //   fft->xn[i][2] = znf;
 
-  //   xbf = (fft->xb[i][0]*fft->four[0][0] + fft->xb[i][1]*fft->four[0][1] + fft->xb[i][2]*fft->four[0][2])
-  //     /fft->normfour[0];
-  //   ybf = (fft->xb[i][0]*fft->four[1][0] + fft->xb[i][1]*fft->four[1][1] + fft->xb[i][2]*fft->four[1][2])
-  //     /fft->normfour[1];
-  //   zbf = (fft->xb[i][0]*fft->four[2][0] + fft->xb[i][1]*fft->four[2][1] + fft->xb[i][2]*fft->four[2][2])
-  //     /fft->normfour[2];
-
-  //   fft->xb[i][0] = xbf;
-  //   fft->xb[i][1] = ybf;
-  //   fft->xb[i][2] = zbf;
-  // }
   return;
 }
 
@@ -322,6 +296,181 @@ double App1L1S110Bfccnonortho::compute_stress(int n, int flag)
 }
 
 /* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_astress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_asigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_tstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_tsigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_pstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_psigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes unitary stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_ustress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_usigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes unitary stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_rstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_rsigma[na];
+}
+
+/* ----------------------------------------------------------------------
    computes the strain in a given point
    ------------------------------------------------------------------------- */
 
@@ -353,8 +502,45 @@ double App1L1S110Bfccnonortho::compute_strain(int n, int flag)
   else if(flag == 6)  // exz
     na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
 
-  return fft->data_eps[na];
+  //return fft->data_eps[na];
+  return fft->vstrain[na];
 }
+
+/* ----------------------------------------------------------------------
+   computes itertive strain in a given point
+   ------------------------------------------------------------------------- */
+
+double App1L1S110Bfccnonortho::compute_istrain(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // exx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // eyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // ezz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // exy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_ieps[na];
+}
+
 /* ----------------------------------------------------------------------
    print stats
 ------------------------------------------------------------------------- */

@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "math.h"
@@ -25,12 +16,12 @@ to reproduce, prepare derivative works, distribute copies to the public, perform
 #include "memory.h"
 #include "error.h"
 #include "output.h"
-
+#include "material.h"
 using namespace PFDD_NS;
 
 // customize by adding keyword to 1st enum
 
-enum{X,Y,Z,THETA,DELTAO,DDELTA,XIR1,XII1,XIR2,XII2,XIR3,XII3,XIR4,XI41,XIR5,XII5,XIR6,XII6,XIR7,XII7,XIR8,XII8,XIR9,XII9,XIR10,XII10,XIR11,XII11,XIR12,XII12,PXX,PYY,PZZ,PXY,PXZ,PYZ,EXX,EYY,EZZ,EXY,EXZ,EYZ,IARRAY,DARRAY};  // also in dump_image
+enum{X,Y,Z,THETA,DELTAO,DDELTA,NHN,PICKED1,PICKED2,GRADX,GRADY,GRADZ,XIR1,XII1,XIR2,XII2,XIR3,XII3,XIR4,XII4,XIR5,XII5,XIR6,XII6,XIR7,XII7,XIR8,XII8,XIR9,XII9,XIR10,XII10,XIR11,XII11,XIR12,XII12,XO1,XO2,XO3,XO4,XO5,XO6,PXX,PYY,PZZ,PXY,PXZ,PYZ,PXXNE,PYYNE,PZZNE,PXYNE,PXZNE,PYZNE,EXX,EYY,EZZ,EXY,EXZ,EYZ,IARRAY,DARRAY,DREG1,DREG2,INT1,INT2,INT3,INT4,INT5,INT6,EXT1,EXT2,EXT3,EXT4,EXT5,EXT6,LAT1,LAT2,LAT3,LAT4,LAT5,LAT6,USFE,PHASE};  // also in dump_image
 enum{LT,LE,GT,GE,EQ,NEQ};
 enum{INT,DOUBLE,TAGINT};           // also in dump_image
 
@@ -47,6 +38,7 @@ DumpText::DumpText(PFDD_C *pfdd_p, int narg, char **arg) : Dump(pfdd_p, narg, ar
 
   stress_flag = 1;
   strain_flag = 1;
+  energy_flag = 1;
 
   if (narg == 4) {
     def = 1;
@@ -296,15 +288,23 @@ void DumpText::pack()
 void DumpText::compute()
 {
   int ND = fft->dimension;
+  fft->intave = 0;
+  fft->extave = 0;
+  fft->latave = 0;
   for(int i=0;i<ND;i++){
     for(int j=0;j<ND;j++){
       fft->local_sigma[i][j] = 0.0;
+      fft->local_sigma_NoExt[i][j] = 0.0;
       fft->avepst[i][j] = 0.0;
       fft->avepsts[i][j] = 0.0;
       fft->avepsd[i][j] = 0.0;
       fft->aveps[i][j] = 0.0;
       fft->ave_eps[i][j] = 0.0;
       fft->ave_sigma[i][j] = 0.0;
+      fft->aveps_NoExt[i][j] = 0.0;
+      fft->ave_eps_NoExt[i][j] = 0.0;
+      fft->ave_sigma_NoExt[i][j] = 0.0;
+      if (app->nphase>1) {fft->aveVs[i][j] = 0.0;}
     }
   }
   if(stress_flag){
@@ -318,6 +318,10 @@ void DumpText::compute()
     fft->strain();
     fft->total_average_strain();
     output->comp_strain = 1;
+  }
+  else if(energy_flag){
+    fft->energy_calc();
+    output->comp_energy = 1;
   }
 }
 
@@ -368,6 +372,8 @@ void DumpText::header_text(int ndump, double time)
   fprintf(fp,"%g %g\n",app->sa*boxxlo,app->sa*boxxhi);
   fprintf(fp,"%g %g\n",app->sb*boxylo,app->sb*boxyhi);
   fprintf(fp,"%g %g\n",app->sc*boxzlo,app->sc*boxzhi);
+  fprintf(fp,"ITEM: XINORM\n");
+  fprintf(fp,"%f\n",fft->xinorm);
   fprintf(fp,"ITEM: ATOMS %s\n",columns);
 }
 
@@ -418,9 +424,53 @@ int DumpText::parse_fields(int narg, char **arg)
     } else if (strcmp(arg[iarg],"z") == 0) {
       pack_choice[i] = &DumpText::pack_z;
       vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xa") == 0) {
+      pack_choice[i] = &DumpText::pack_x;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"ya") == 0) {
+      pack_choice[i] = &DumpText::pack_y;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"za") == 0) {
+      pack_choice[i] = &DumpText::pack_z;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"i") == 0) {
+      pack_choice[i] = &DumpText::pack_i;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"j") == 0) {
+      pack_choice[i] = &DumpText::pack_j;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"k") == 0) {
+      pack_choice[i] = &DumpText::pack_k;
+      vtype[i] = DOUBLE;
     } else if (strcmp(arg[iarg],"theta") == 0) {  //Grad
       pack_choice[i] = &DumpText::pack_theta;
       vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"nhn1") == 0) {
+      pack_choice[i] = &DumpText::pack_nhn1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"nhn2") == 0) {
+      pack_choice[i] = &DumpText::pack_nhn2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"picked1") == 0) {
+      pack_choice[i] = &DumpText::pack_picked_1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"picked2") == 0) {
+      pack_choice[i] = &DumpText::pack_picked_2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dtkmc1") == 0) {
+      pack_choice[i] = &DumpText::pack_dtkmc1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dtkmc2") == 0) {
+      pack_choice[i] = &DumpText::pack_dtkmc2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"gradx") == 0) {
+      pack_choice[i] = &DumpText::pack_gradx;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"grady") == 0) {
+      pack_choice[i] = &DumpText::pack_grady;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"gradz") == 0) {
+      pack_choice[i] = &DumpText::pack_gradz;
     } else if (strcmp(arg[iarg],"usfe1") == 0) {
       pack_choice[i] = &DumpText::pack_usfe1;
       vtype[i] = DOUBLE;
@@ -460,7 +510,175 @@ int DumpText::parse_fields(int narg, char **arg)
       pack_choice[i] = &DumpText::pack_pyz;
       vtype[i] = DOUBLE;
       stress_flag = 1;
-    } else if (strcmp(arg[iarg],"exx") == 0) {
+    } else if (strcmp(arg[iarg],"pxxNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pxx_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"pyyNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pyy_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"pzzNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pzz_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"pxyNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pxy_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"pxzNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pxz_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"pyzNE") == 0) {
+      pack_choice[i] = &DumpText::pack_pyz_NoExt;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apxx") == 0) {
+      pack_choice[i] = &DumpText::pack_apxx;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apyy") == 0) {
+      pack_choice[i] = &DumpText::pack_apyy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apzz") == 0) {
+      pack_choice[i] = &DumpText::pack_apzz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apxy") == 0) {
+      pack_choice[i] = &DumpText::pack_apxy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apxz") == 0) {
+      pack_choice[i] = &DumpText::pack_apxz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"apyz") == 0) {
+      pack_choice[i] = &DumpText::pack_apyz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpxx") == 0) {
+      pack_choice[i] = &DumpText::pack_tpxx;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpyy") == 0) {
+      pack_choice[i] = &DumpText::pack_tpyy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpzz") == 0) {
+      pack_choice[i] = &DumpText::pack_tpzz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpxy") == 0) {
+      pack_choice[i] = &DumpText::pack_tpxy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpxz") == 0) {
+      pack_choice[i] = &DumpText::pack_tpxz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"tpyz") == 0) {
+      pack_choice[i] = &DumpText::pack_tpyz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppxx") == 0) {
+      pack_choice[i] = &DumpText::pack_ppxx;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppyy") == 0) {
+      pack_choice[i] = &DumpText::pack_ppyy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppzz") == 0) {
+      pack_choice[i] = &DumpText::pack_ppzz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppxy") == 0) {
+      pack_choice[i] = &DumpText::pack_ppxy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppxz") == 0) {
+      pack_choice[i] = &DumpText::pack_ppxz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"ppyz") == 0) {
+      pack_choice[i] = &DumpText::pack_ppyz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upxx") == 0) {
+      pack_choice[i] = &DumpText::pack_upxx;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upyy") == 0) {
+      pack_choice[i] = &DumpText::pack_upyy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upzz") == 0) {
+      pack_choice[i] = &DumpText::pack_upzz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upxy") == 0) {
+      pack_choice[i] = &DumpText::pack_upxy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upxz") == 0) {
+      pack_choice[i] = &DumpText::pack_upxz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"upyz") == 0) {
+      pack_choice[i] = &DumpText::pack_upyz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpxx") == 0) {
+      pack_choice[i] = &DumpText::pack_rpxx;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpyy") == 0) {
+      pack_choice[i] = &DumpText::pack_rpyy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpzz") == 0) {
+      pack_choice[i] = &DumpText::pack_rpzz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpxy") == 0) {
+      pack_choice[i] = &DumpText::pack_rpxy;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpxz") == 0) {
+      pack_choice[i] = &DumpText::pack_rpxz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"rpyz") == 0) {
+      pack_choice[i] = &DumpText::pack_rpyz;
+      vtype[i] = DOUBLE;
+      stress_flag = 1;
+    } else if (strcmp(arg[iarg],"iexx") == 0) {
+      pack_choice[i] = &DumpText::pack_iexx;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    } else if (strcmp(arg[iarg],"ieyy") == 0) {
+      pack_choice[i] = &DumpText::pack_ieyy;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    }else if (strcmp(arg[iarg],"iezz") == 0) {
+      pack_choice[i] = &DumpText::pack_iezz;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    }else if (strcmp(arg[iarg],"iexy") == 0) {
+      pack_choice[i] = &DumpText::pack_iexy;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    }else if (strcmp(arg[iarg],"iexz") == 0) {
+      pack_choice[i] = &DumpText::pack_iexz;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    }else if (strcmp(arg[iarg],"ieyz") == 0) {
+      pack_choice[i] = &DumpText::pack_ieyz;
+      vtype[i] = DOUBLE;
+      strain_flag = 1;
+    }else if (strcmp(arg[iarg],"exx") == 0) {
       pack_choice[i] = &DumpText::pack_exx;
       vtype[i] = DOUBLE;
       strain_flag = 1;
@@ -555,6 +773,148 @@ int DumpText::parse_fields(int narg, char **arg)
       vtype[i] = DOUBLE;
     } else if (strcmp(arg[iarg],"xii12") == 0) {
       pack_choice[i] = &DumpText::pack_xii12;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo1") == 0) {
+      pack_choice[i] = &DumpText::pack_xo1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo2") == 0) {
+      pack_choice[i] = &DumpText::pack_xo2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo3") == 0) {
+      pack_choice[i] = &DumpText::pack_xo3;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo4") == 0) {
+      pack_choice[i] = &DumpText::pack_xo4;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo5") == 0) {
+      pack_choice[i] = &DumpText::pack_xo5;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"xo6") == 0) {
+      pack_choice[i] = &DumpText::pack_xo6;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dreg1") == 0) { // Disregistry 1, FCC
+      pack_choice[i] = &DumpText::pack_dreg1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dreg2") == 0) { // Disregistry 2, FCC
+      pack_choice[i] = &DumpText::pack_dreg2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dregp1_1") == 0) { // Disregistry Trailing Partial 1, FCC
+      pack_choice[i] = &DumpText::pack_dregp1_1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dregp1_2") == 0) { // Disregistry Leading Partial 1, FCC
+      pack_choice[i] = &DumpText::pack_dregp1_2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dregp2_1") == 0) { // Disregistry Leading Partial 2, FCC
+      pack_choice[i] = &DumpText::pack_dregp2_1;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"dregp2_2") == 0) { // Disregistry Trailing Partial 2, FCC
+      pack_choice[i] = &DumpText::pack_dregp2_2;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"int1") ==0) {
+      pack_choice[i] = &DumpText::pack_int1;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"int2") ==0) {
+      pack_choice[i] = &DumpText::pack_int2;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"int3") ==0) {
+      pack_choice[i] = &DumpText::pack_int3;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"int4") ==0) {
+      pack_choice[i] = &DumpText::pack_int4;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"int5") ==0) {
+      pack_choice[i] = &DumpText::pack_int5;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"int6") ==0) {
+      pack_choice[i] = &DumpText::pack_int6;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext1") ==0) {
+      pack_choice[i] = &DumpText::pack_ext1;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext2") ==0) {
+      pack_choice[i] = &DumpText::pack_ext2;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext3") ==0) {
+      pack_choice[i] = &DumpText::pack_ext3;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext4") ==0) {
+      pack_choice[i] = &DumpText::pack_ext4;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext5") ==0) {
+      pack_choice[i] = &DumpText::pack_ext5;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ext6") ==0) {
+      pack_choice[i] = &DumpText::pack_ext6;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat1") ==0) {
+      pack_choice[i] = &DumpText::pack_lat1;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat2") ==0) {
+      pack_choice[i] = &DumpText::pack_lat2;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat3") ==0) {
+      pack_choice[i] = &DumpText::pack_lat3;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat4") ==0) {
+      pack_choice[i] = &DumpText::pack_lat4;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat5") ==0) {
+      pack_choice[i] = &DumpText::pack_lat5;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"lat6") ==0) {
+      pack_choice[i] = &DumpText::pack_lat6;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"datareal1") ==0) {
+      pack_choice[i] = &DumpText::pack_data_real_1;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1xx") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_xx;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1xy") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_xy;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1xz") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_xz;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1yy") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_yy;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1yz") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_yz;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"ff1zz") ==0) {
+      pack_choice[i] = &DumpText::pack_ff1_zz;
+      vtype[i] = DOUBLE;
+      energy_flag = 1;
+    } else if (strcmp(arg[iarg],"usfe") ==0) {
+      pack_choice[i] = &DumpText::pack_usfe;
+      vtype[i] = DOUBLE;
+    } else if (strcmp(arg[iarg],"phase") == 0) {
+      pack_choice[i] = &DumpText::pack_phase;
       vtype[i] = DOUBLE;
 
     // integer value = iN
@@ -753,6 +1113,153 @@ void DumpText::pack_z(int n)
 }
 /* ---------------------------------------------------------------------- */
 
+void DumpText::pack_xa(int n)
+{
+  double **xyz = app->xyz;
+  int **siteijk = app->siteijk;
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int ND = fft->dimension;
+  int na=-1;
+
+  int m=0;
+  int p=0;
+  int q=0;
+
+  double Rijl;
+
+  for (int i = 0; i < nchoose; i++) {
+    m=siteijk[i][0] - lxs;
+    p=siteijk[i][1];
+    q=siteijk[i][2];
+    na = m*N2*N3 + p*N3 + q + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND;
+    Rijl = fft->Rij[na];
+    buf[n] = (fft->sclprim[0][0]*xyz[clist[i]][0]+
+	      fft->sclprim[0][1]*xyz[clist[i]][1]+
+	      fft->sclprim[0][2]*xyz[clist[i]][2])*Rijl;
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_ya(int n)
+{
+  double **xyz = app->xyz;
+  int **siteijk = app->siteijk;
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int ND = fft->dimension;
+  int na=-1;
+
+  int m=0;
+  int p=0;
+  int q=0;
+
+  double Rijl;
+
+  for (int i = 0; i < nchoose; i++) {
+    m=siteijk[i][0] - lxs;
+    p=siteijk[i][1];
+    q=siteijk[i][2];
+    na = m*N2*N3 + p*N3 + q + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND;
+    Rijl = fft->Rij[na];
+    buf[n] = (fft->sclprim[1][0]*xyz[clist[i]][0]+
+	      fft->sclprim[1][1]*xyz[clist[i]][1]+
+	      fft->sclprim[1][2]*xyz[clist[i]][2])*Rijl;
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_za(int n)
+{
+  double **xyz = app->xyz;
+  int **siteijk = app->siteijk;
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int ND = fft->dimension;
+  int na=-1;
+
+  int m=0;
+  int p=0;
+  int q=0;
+
+  double Rijl;
+
+  for (int i = 0; i < nchoose; i++) {
+    m=siteijk[i][0] - lxs;
+    p=siteijk[i][1];
+    q=siteijk[i][2];
+    na = m*N2*N3 + p*N3 + q + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND;
+    Rijl = fft->Rij[na];
+    buf[n] = (fft->sclprim[2][0]*xyz[clist[i]][0]+
+	      fft->sclprim[2][1]*xyz[clist[i]][1]+
+	      fft->sclprim[2][2]*xyz[clist[i]][2])*Rijl;
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_i(int n)
+{
+  double **xyz = app->xyz;
+  // double norm = sqrt(fft->four[0][0]*fft->four[0][0]+
+  // 		     fft->four[0][1]*fft->four[0][1]+
+  // 		     fft->four[0][2]*fft->four[0][2]);
+
+  for (int i = 0; i < nchoose; i++) {
+    // buf[n] = (fft->four[0][0]*xyz[clist[i]][0]+
+    // 	      fft->four[0][1]*xyz[clist[i]][1]+
+    // 	      fft->four[0][2]*xyz[clist[i]][2])/norm;
+    buf[n] = xyz[clist[i]][0];
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_j(int n)
+{
+  double **xyz = app->xyz;
+  // double norm = sqrt(fft->four[1][0]*fft->four[1][0]+
+  // 		     fft->four[1][1]*fft->four[1][1]+
+  // 		     fft->four[1][2]*fft->four[1][2]);
+
+  for (int i = 0; i < nchoose; i++) {
+    // buf[n] = (fft->four[1][0]*xyz[clist[i]][0]+
+    // 	      fft->four[1][1]*xyz[clist[i]][1]+
+    // 	      fft->four[1][2]*xyz[clist[i]][2])/norm;
+    buf[n] = xyz[clist[i]][1];
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_k(int n)
+{
+  double **xyz = app->xyz;
+  // double norm = sqrt(fft->four[2][0]*fft->four[2][0]+
+  // 		     fft->four[2][1]*fft->four[2][1]+
+  // 		     fft->four[2][2]*fft->four[2][2]);
+
+  for (int i = 0; i < nchoose; i++) {
+    // buf[n] = (fft->four[2][0]*xyz[clist[i]][0]+
+    // 	      fft->four[2][1]*xyz[clist[i]][1]+
+    // 	      fft->four[2][2]*xyz[clist[i]][2])/norm;
+    buf[n] = xyz[clist[i]][2];
+    n += size_one;
+  }
+}
+
 void DumpText::pack_theta(int n)
 {
   for (int i = 0; i < nchoose; i++) {
@@ -761,6 +1268,86 @@ void DumpText::pack_theta(int n)
     n += size_one;
   }
 }
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_nhn1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_nhn(clist[i],1);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_nhn2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_nhn(clist[i],2);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_picked_1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_picked(clist[i],1);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_picked_2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_picked(clist[i],2);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_dtkmc1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_dtkmc(clist[i],1);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dtkmc2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_dtkmc(clist[i],2);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_gradx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_gradx(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_grady(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_grady(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_gradz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_gradz(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
 
 void DumpText::pack_usfe1(int n)
 {
@@ -1048,6 +1635,66 @@ void DumpText::pack_xii12(int n)
 
 /* ---------------------------------------------------------------------- */
 
+void DumpText::pack_xo1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_xo2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_xo3(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_xo4(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_xo5(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_xo6(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_xo(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
 void DumpText::pack_pxx(int n)
 {
   for (int i = 0; i < nchoose; i++) {
@@ -1096,6 +1743,378 @@ void DumpText::pack_pyz(int n)
 {
   for (int i = 0; i < nchoose; i++) {
     buf[n] = app->compute_stress(clist[i],6);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_pxx_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_pyy_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],2);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_pzz_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],3);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_pxy_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],4);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_pxz_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],5);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_pyz_NoExt(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_stress_NoExt(clist[i],6);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_apxx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_apyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_apzz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_apxy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_apxz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_apyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_astress(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_tpxx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_tpyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_tpzz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_tpxy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_tpxz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_tpyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_tstress(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_ppxx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ppyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ppzz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ppxy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ppxz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ppyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_pstress(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_upxx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_upyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_upzz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_upxy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_upxz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_upyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ustress(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+
+void DumpText::pack_rpxx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],1);
+    n += size_one;
+  }
+}
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_rpyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_rpzz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_rpxy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_rpxz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_rpyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_rstress(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_iexx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ieyy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_iezz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_iexy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_iexz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ieyz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_istrain(clist[i],6);
     n += size_one;
   }
 }
@@ -1173,6 +2192,298 @@ void DumpText::pack_darray(int n)
 
   for (int i = 0; i < nchoose; i++) {
     buf[n] = dvec[clist[i]];
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_dreg1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dreg(clist[i],1);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dreg2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dreg(clist[i],3);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dregp1_1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dregp(clist[i],1);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dregp1_2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dregp(clist[i],2);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dregp2_1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dregp(clist[i],3);
+    n += size_one;
+  }
+}
+
+void DumpText::pack_dregp2_2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_dregp(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int3(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int4(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int5(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_int6(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_intE(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext3(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext4(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext5(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ext6(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_extE(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat2(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat3(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat4(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat5(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_lat6(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_mean_latE(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_data_real_1(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_data_real(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_xx(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_xy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],2);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_xz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],3);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_yy(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],4);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_yz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],5);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_ff1_zz(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_ff1(clist[i],6);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_usfe(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_usfe(clist[i],1);
+    n += size_one;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+void DumpText::pack_phase(int n)
+{
+  for (int i = 0; i < nchoose; i++) {
+    buf[n] = app->compute_phase(clist[i],6);
     n += size_one;
   }
 }

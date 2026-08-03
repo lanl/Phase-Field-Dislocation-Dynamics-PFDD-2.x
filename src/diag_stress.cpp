@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -46,13 +37,18 @@ void DiagStress::compute()
   if(output->comp_strain == 0){
     for(int i=0;i<ND;i++){
       for(int j=0;j<ND;j++){
-	fft->local_sigma[i][j] = 0.0;
-	fft->avepst[i][j] = 0.0;
-	fft->avepsts[i][j] = 0.0;
-	fft->avepsd[i][j] = 0.0;
-	fft->aveps[i][j] = 0.0;
-	fft->ave_eps[i][j] = 0.0;
-	fft->ave_sigma[i][j] = 0.0;
+        fft->local_sigma[i][j] = 0.0;
+        fft->local_sigma_NoExt[i][j] = 0.0;
+        fft->avepst[i][j] = 0.0;
+        fft->avepsts[i][j] = 0.0;
+        fft->avepsd[i][j] = 0.0;
+        fft->aveps[i][j] = 0.0;
+        fft->ave_eps[i][j] = 0.0;
+        fft->ave_sigma[i][j] = 0.0;
+        fft->aveps_NoExt[i][j] = 0.0;
+        fft->ave_eps_NoExt[i][j] = 0.0;
+        fft->ave_sigma_NoExt[i][j] = 0.0;
+        if (app->nphase>1) {fft->aveVs[i][j] = 0.0;}
       }
     }
     fft->strain();
@@ -63,8 +59,10 @@ void DiagStress::compute()
   else if(output->comp_stress == 0){
     for(int i=0;i<ND;i++){
       for(int j=0;j<ND;j++){
-	fft->local_sigma[i][j] = 0.0;
-	fft->ave_sigma[i][j] = 0.0;
+        fft->local_sigma[i][j] = 0.0;
+        fft->local_sigma_NoExt[i][j] = 0.0;
+        fft->ave_sigma[i][j] = 0.0;
+        fft->ave_sigma_NoExt[i][j] = 0.0;
       }
     }
     fft->stress();
@@ -76,13 +74,13 @@ void DiagStress::compute()
 
 void DiagStress::stats(char *strtmp)
 {
-  sprintf(strtmp," %8g %8g %8g %8g %8g %8g",fft->ave_sigma[0][0],fft->ave_sigma[1][1],fft->ave_sigma[2][2],
-	  fft->ave_sigma[0][1],fft->ave_sigma[0][2],fft->ave_sigma[1][2]);
+  sprintf(strtmp," %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g",fft->ave_sigma[0][0],fft->ave_sigma[1][1],fft->ave_sigma[2][2],fft->ave_sigma[0][1],fft->ave_sigma[0][2],fft->ave_sigma[1][2],
+  fft->ave_sigma_NoExt[0][0],fft->ave_sigma_NoExt[1][1],fft->ave_sigma_NoExt[2][2],fft->ave_sigma_NoExt[0][1],fft->ave_sigma_NoExt[0][2],fft->ave_sigma_NoExt[1][2]);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void DiagStress::stats_header(char *strtmp)
 {
-  sprintf(strtmp," %8s %8s %8s %8s %8s %8s","s11","s22","s33","s12","s13","s23");
+  sprintf(strtmp," %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s","s11","s22","s33","s12","s13","s23","s11NE","s22NE","s33NE","s12NE","s13NE","s23NE");
 }

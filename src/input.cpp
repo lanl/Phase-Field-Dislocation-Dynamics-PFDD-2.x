@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -464,6 +455,11 @@ int Input::execute_command()
   else if (!strcmp(command,"solve_style")) solve_style();
   else if (!strcmp(command,"stats")) stats();
 
+  // New material and region input
+  else if (!strcmp(command,"material2")) material2();
+  else if (!strcmp(command,"material3")) material3();
+  else if (!strcmp(command,"dislocation")) dislocation();
+
   else flag = 0;
 
   // return if command was listed above
@@ -795,6 +791,28 @@ void Input::boundary()
   if (fft->box_exist)
     error->all(FLERR,"Boundary command after simulation box is defined");
   fft->set_boundary(narg,arg);
+}
+
+// New material and region input
+void Input::material2()
+{
+  if (fft == NULL) error->all(FLERR,"Material2 command before fft_style set");
+
+  fft->set_material2(narg,arg);
+}
+
+void Input::material3()
+{
+  if (fft == NULL) error->all(FLERR,"Material3 command before fft_style set");
+
+  fft->set_material3(narg,arg);
+}
+
+void Input::dislocation()
+{
+  if (fft == NULL) error->all(FLERR,"dislocation command before fft_style set");
+
+  fft->set_dislocation(narg,arg);
 }
 
 /* ---------------------------------------------------------------------- */

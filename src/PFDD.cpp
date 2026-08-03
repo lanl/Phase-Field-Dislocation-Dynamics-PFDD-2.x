@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -45,6 +36,9 @@ PFDD_C::PFDD_C(int narg, char **arg, MPI_Comm communicator)
   world = communicator;
   screen = stdout;
   logfile = NULL;
+  avgfile = NULL;
+  iterfile = NULL;
+  enerfile = NULL;
 
   // parse input switches
 
@@ -152,12 +146,46 @@ PFDD_C::PFDD_C(int narg, char **arg, MPI_Comm communicator)
       if (logfile == NULL)
         error->one(FLERR,"Cannot open universe log file");
     }
+    if (logflag == 0) {
+      avgfile = fopen("avgdata.pfdd","w");
+      if (avgfile == NULL)
+        error->one(FLERR,"Cannot open avgdata.pfdd");
+    } else if (strcmp(arg[logflag],"none") == 0)
+      avgfile = NULL;
+    else {
+      avgfile = fopen(arg[logflag],"w");
+      if (avgfile == NULL)
+        error->one(FLERR,"Cannot open universe avgdata file");
+    }
+    if (logflag == 0) {
+      enerfile = fopen("enerdata.pfdd","w");
+      if (enerfile == NULL)
+        error->one(FLERR,"Cannot open enerdata.pfdd");
+    } else if (strcmp(arg[logflag],"none") == 0)
+      enerfile = NULL;
+    else {
+      enerfile = fopen(arg[logflag],"w");
+      if (enerfile == NULL)
+        error->one(FLERR,"Cannot open universe enerdata file");
+    }
+    if (logflag == 0) {
+      iterfile = fopen("iterdata.pfdd","w");
+      if (iterfile == NULL)
+        error->one(FLERR,"Cannot open iterdata.pfdd");
+    } else if (strcmp(arg[logflag],"none") == 0)
+      iterfile = NULL;
+    else {
+      iterfile = fopen(arg[logflag],"w");
+      if (iterfile == NULL)
+        error->one(FLERR,"Cannot open universe iterdata file");
+    }
   }
 
   if (me > 0) {
     if (screenflag == 0) screen = stdout;
     else screen = NULL;
     logfile = NULL;
+    avgfile = NULL;
   }
 
   // make universe and single world the same, since no partition switch
@@ -207,6 +235,7 @@ PFDD_C::~PFDD_C()
   destroy();
 
   if (logfile) fclose(logfile);
+  if (avgfile) fclose(avgfile);
   if (screen && screen != stdout) fclose(screen);
   
   delete input;

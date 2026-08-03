@@ -1,0 +1,1126 @@
+/* ----------------------------------------------------------------------
+PFDD -- Phase Field Dislocation Dynamics
+
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
+   ------------------------------------------------------------------------- */
+
+#include "math.h"
+#include "string.h"
+#include "stdlib.h"
+#include "app_6SFCC.h"
+#include "fft.h"
+#include "solve.h"
+#include "random_park.h"
+#include "error.h"
+#include "material.h"
+
+using namespace PFDD_NS;;
+
+/* ---------------------------------------------------------------------- */
+
+App6SFCC::App6SFCC(PFDD_C *pfdd_p, int narg, char **arg) :
+  App(pfdd_p,narg,arg)
+{
+  ndouble = 0;
+  timestep = 1.0;
+  slip_systems = 6;  // The # of slip systems has to be allocated in the constructure
+                      //  fot the FFT class to be able to allocate arrays
+  num_planes = 2;  // The # of plane normals has to be allocated in the constructure
+                      //  fot the FFT class to be able to allocate arrays
+
+  CD = 0.1;           // Dislocation mobility
+  dflag = 1;
+  tflag = 0;          // CTB Testing
+  xstop = 0;
+
+  if(setup_flag == -1)
+    setup_flag = 3; //default to a screw dipole
+  if(core_flag == -1)
+    core_flag = 1; //default to sin^2
+  if(phase_flag == -1)
+    nphase = 1; //default to homogeneous
+}
+
+/* ---------------------------------------------------------------------- */
+
+App6SFCC::~App6SFCC()
+{
+  delete [] sites;
+}
+
+/* ----------------------------------------------------------------------
+   set site value ptrs each time iarray/darray are reallocated
+   ------------------------------------------------------------------------- */
+
+void App6SFCC::grow_app()
+{
+  darray = fft->xi;
+}
+
+/* ----------------------------------------------------------------------
+   initialize before each run
+   check validity of site values
+   ------------------------------------------------------------------------- */
+
+void App6SFCC::init_app()
+{
+  delete [] sites;
+  sites = new int[1 + maxneigh];
+
+  grow_app();
+  set_slip();
+  initial_sxtal();
+
+  stopsteps = static_cast<int>(floor(stoptime/timestep));
+
+  // char temp1[500], temp2[500];
+
+  // sprintf(temp1,"dumps/slip_%d.txt",me);
+  // sprintf(temp2,"dumps/energy_%d.txt",me);
+  // sfile = fopen(temp1,"w");
+  // efile = fopen(temp2, "w");
+  // fccflag = 0;
+}
+/* ----------------------------------------------------------------------
+   input specific for this app
+   ------------------------------------------------------------------------- */
+void App6SFCC::input_app(char *command, int narg, char **arg)
+{
+  // error->all(FLERR,"Unrecognized command");
+}
+
+/* ----------------------------------------------------------------------
+   compute energy of site
+   ------------------------------------------------------------------------- */
+
+// double AppFCC::site_energy(int i)
+// {
+//   int isite = spin[i];
+//   int eng = 0;
+//   for (int j = 0; j < numneigh[i]; j++)
+//     if (isite != spin[neighbor[i][j]]) eng++;
+//   return (double) eng;
+// }
+
+/* ----------------------------------------------------------------------
+   rKMC method
+   perform a site event with null bin rejection
+   flip randomly to either spin
+   null bin extends to size 2
+   ------------------------------------------------------------------------- */
+
+// void AppFCC::site_event_rejection(int i, RandomPark *random)
+// {
+//   int oldstate = spin[i];
+//   double einitial = site_energy(i);
+
+//   // event = random spin from 1 to 2, including self
+
+//   if (random->uniform() < 0.5) spin[i] = 1;
+//   else spin[i] = 2;
+//   double efinal = site_energy(i);
+
+//   // accept or reject via Boltzmann criterion
+
+//   if (efinal <= einitial) {
+//   } else if (temperature == 0.0) {
+//     spin[i] = oldstate;
+//   } else if (random->uniform() > exp((einitial-efinal)*t_inverse)) {
+//     spin[i] = oldstate;
+//   }
+
+//   if (spin[i] != oldstate) naccept++;
+
+//   // set mask if site could not have changed
+//   // if site changed, unset mask of sites with affected propensity
+//   // OK to change mask of ghost sites since never used
+
+//   if (Lmask) {
+//     if (einitial < 0.5*numneigh[i]) mask[i] = 1;
+//     if (spin[i] != oldstate)
+//       for (int j = 0; j < numneigh[i]; j++)
+// 	mask[neighbor[i][j]] = 0;
+//   }
+// }
+
+/* ----------------------------------------------------------------------
+   KMC method
+   compute total propensity of owned site summed over possible events
+   ------------------------------------------------------------------------- */
+
+// double AppFCC::site_propensity(int i)
+// {
+//   // event = spin flip
+
+//   int oldstate = spin[i];
+//   int newstate = 1;
+//   if (oldstate == 1) newstate = 2;
+
+//   // compute energy difference between initial and final state
+//   // if downhill or no energy change, propensity = 1
+//   // if uphill energy change, propensity = Boltzmann factor
+
+//   double einitial = site_energy(i);
+//   spin[i] = newstate;
+//   double efinal = site_energy(i);
+//   spin[i] = oldstate;
+
+//   if (efinal <= einitial) return 1.0;
+//   else if (temperature == 0.0) return 0.0;
+//   else return exp((einitial-efinal)*t_inverse);
+// }
+
+/* ----------------------------------------------------------------------
+   KMC method
+   choose and perform an event for site
+   ------------------------------------------------------------------------- */
+
+// void AppFCC::site_event(int i, RandomPark *random)
+// {
+//   int m;
+
+//   // perform event = spin flip
+
+//   if (spin[i] == 1) spin[i] = 2;
+//   else spin[i] = 1;
+
+//   // compute propensity changes for self and neighbor sites
+//   // ignore update of neighbor sites with isite < 0
+
+//   int nsites = 0;
+//   int isite = i2site[i];
+//   sites[nsites++] = isite;
+//   propensity[isite] = site_propensity(i);
+
+//   for (int j = 0; j < numneigh[i]; j++) {
+//     m = neighbor[i][j];
+//     isite = i2site[m];
+//     if (isite < 0) continue;
+//     sites[nsites++] = isite;
+//     propensity[isite] = site_propensity(m);
+//   }
+
+//   solve->update(nsites,sites,propensity);
+// }
+
+/* ----------------------------------------------------------------------
+   New
+   returns the spin of one site
+   ------------------------------------------------------------------------- */
+
+// int AppFCC::site_spin (int i) {
+//   if ((i<0)||(i>nlocal))
+//     error->all (FLERR, "Invalid site index");
+//   return spin[i];
+// }
+
+
+void App6SFCC::set_slip()
+{
+  int i, j, k;
+  double s3;
+  double s2;
+  double s6;
+  double xnf=0,ynf=0,znf=0;
+  double xbf=0,ybf=0,zbf=0;
+
+  s3 = sqrt(3);
+  s2 = sqrt(2);
+  
+  for (i=0;i<3 ; i++) {
+    fft->xn[i][0]= 1.0/s3;
+    fft->xn[i][1]= 1.0/s3;
+    fft->xn[i][2]= 1.0/s3;
+  }
+  for (i=3;i<6 ; i++) {
+    fft->xn[i][0]= -1.0/s3;
+    fft->xn[i][1]= -1.0/s3;
+    fft->xn[i][2]= 1.0/s3;
+  }
+// MUST BE IN THIS ORDER FOR LOOKUP TABLE OR FOURIER: <110> <101> <011>
+
+  fft->xb[0][0] = -1.0/s2;
+  fft->xb[0][1] = 1.0/s2;
+  fft->xb[0][2] = 0.0;
+
+  fft->xb[1][0] = 1.0/s2;
+  fft->xb[1][1] = 0.0;
+  fft->xb[1][2] = -1.0/s2;
+
+  fft->xb[2][0] = 0.0;
+  fft->xb[2][1] = -1.0/s2;
+  fft->xb[2][2] = 1.0/s2;
+
+  fft->xb[3][0] = -1.0/s2;
+  fft->xb[3][1] = 1.0/s2;
+  fft->xb[3][2] = 0.0;
+
+  fft->xb[4][0] = 1.0/s2;
+  fft->xb[4][1] = 0.0;
+  fft->xb[4][2] = 1.0/s2;
+
+  fft->xb[5][0] = 0.0;
+  fft->xb[5][1] = -1.0/s2;
+  fft->xb[5][2] = -1.0/s2;
+
+}
+/* ----------------------------------------------------------------------
+   computes the xi in a given point and slip system
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_xi(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 2){ // 1 slip system, imaginary value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 3){ // 2 slip system, real value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 4){ // 2 slip system, imaginary value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 5){ // 3 slip system, real value
+    slip = 2;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 6){ // 3 slip system, imaginary value
+    slip = 2;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  if(flag == 7){ // 4 slip system, real value
+    slip = 3;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 8){ // 4 slip system, imaginary value
+    slip = 3;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 9){ // 5 slip system, real value
+    slip = 4;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 10){ // 5 slip system, imaginary value
+    slip = 4;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 11){ // 6 slip system, real value
+    slip = 5;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 12){ // 6 slip system, imaginary value
+    slip = 5;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  
+  return fft->xi[0][na];
+}
+/* ----------------------------------------------------------------------
+   computes the disregistry in a given point and slip system
+------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_dreg(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip plane, real value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 2){ // 1 slip plane, imaginary value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 3){ // 2 slip plane, real value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 4){ // 2 slip plane, imaginary value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  
+  return abs(fft->dreg[0][na]);
+}
+/* ----------------------------------------------------------------------
+   computes the partial disregistry projection in a given point and slip system
+------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_dregp(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip plane, real value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 2){ // 1 slip plane, imaginary value
+    slip = 0;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  else if(flag == 3){ // 2 slip plane, real value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 4){ // 2 slip plane, imaginary value
+    slip = 1;
+    na = 2*(i*N2*N3 + j*N3 + k + slip*lN1*N2*N3) + 1;
+  }
+  
+  return abs(fft->dregp[0][na]);
+}
+/* ----------------------------------------------------------------------
+   computes the internal energy in a given point and slip system
+------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_intE(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int na2=-1;
+  int na3=-1;
+  int na4=-1;
+  int na5=-1;
+  int na6=-1;
+  double int_ave_det = -1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+
+    // int_ave_det = fft->dE_int[na];
+    // na2 = i*N2*N3 + j*N3 + k + (slip+1)*lN1*N2*N3;
+    // int_ave_det += fft->dE_int[na2];
+    // na3 = i*N2*N3 + j*N3 + k + (slip+2)*lN1*N2*N3;
+    // int_ave_det += fft->dE_int[na3];
+    // na4 = i*N2*N3 + j*N3 + k + (slip+3)*lN1*N2*N3;
+    // int_ave_det += fft->dE_int[na4];
+    // na5 = i*N2*N3 + j*N3 + k + (slip+4)*lN1*N2*N3;
+    // int_ave_det += fft->dE_int[na5];
+    // na6 = i*N2*N3 + j*N3 + k + (slip+5)*lN1*N2*N3;
+    // int_ave_det += fft->dE_int[na6];
+    // int_ave_det = int_ave_det;
+  }
+  else if(flag == 2){ // 2 slip system, real value
+    slip = 1;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 3){ // 3 slip system, real value
+    slip = 2;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  if(flag == 4){ // 4 slip system, real value
+    slip = 3;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 5){ // 5 slip system, real value
+    slip = 4;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 6){ // 6 slip system, real value
+    slip = 5;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  return fft->E_int[na];
+  // return fft->dE_int[na];
+  // return int_ave_det;
+}
+/* ----------------------------------------------------------------------
+   computes the core energy in a given point and slip system
+------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_latE(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int na2=-1;
+  int na3=-1;
+  int na4=-1;
+  int na5=-1;
+  int na6=-1;
+  double lat_ave_det = -1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+
+    // lat_ave_det = fft->dE_lat[na];
+    // na2 = i*N2*N3 + j*N3 + k + (slip+1)*lN1*N2*N3;
+    // lat_ave_det += fft->dE_lat[na2];
+    // na3 = i*N2*N3 + j*N3 + k + (slip+2)*lN1*N2*N3;
+    // lat_ave_det += fft->dE_lat[na3];
+    // na4 = i*N2*N3 + j*N3 + k + (slip+3)*lN1*N2*N3;
+    // lat_ave_det += fft->dE_lat[na4];
+    // na5 = i*N2*N3 + j*N3 + k + (slip+4)*lN1*N2*N3;
+    // lat_ave_det += fft->dE_lat[na5];
+    // na6 = i*N2*N3 + j*N3 + k + (slip+5)*lN1*N2*N3;
+    // lat_ave_det += fft->dE_lat[na6];
+    // lat_ave_det = lat_ave_det;
+  }
+  else if(flag == 2){ // 2 slip system, real value
+    slip = 1;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 3){ // 3 slip system, real value
+    slip = 2;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  if(flag == 4){ // 4 slip system, real value
+    slip = 3;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 5){ // 5 slip system, real value
+    slip = 4;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 6){ // 6 slip system, real value
+    slip = 5;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  return fft->E_lat[na];
+  // return fft->dE_core[na];
+  // return lat_ave_det;
+}
+
+/* ----------------------------------------------------------------------
+   computes the external energy in a given point and slip system
+------------------------------------------------------------------------- */
+
+double App6SFCC::compute_mean_extE(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int na2=-1;
+  int na3=-1;
+  int na4=-1;
+  int na5=-1;
+  int na6=-1;
+  double ext_ave_det = -1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+
+    // ext_ave_det = fft->dE_ext[na];
+    // na2 = i*N2*N3 + j*N3 + k + (slip+1)*lN1*N2*N3;
+    // ext_ave_det += fft->dE_ext[na2];
+    // na3 = i*N2*N3 + j*N3 + k + (slip+2)*lN1*N2*N3;
+    // ext_ave_det += fft->dE_ext[na3];
+    // na4 = i*N2*N3 + j*N3 + k + (slip+3)*lN1*N2*N3;
+    // ext_ave_det += fft->dE_ext[na4];
+    // na5 = i*N2*N3 + j*N3 + k + (slip+4)*lN1*N2*N3;
+    // ext_ave_det += fft->dE_ext[na5];
+    // na6 = i*N2*N3 + j*N3 + k + (slip+5)*lN1*N2*N3;
+    // ext_ave_det += fft->dE_ext[na6];
+    // ext_ave_det = ext_ave_det;
+  }
+  else if(flag == 2){ // 2 slip system, real value
+    slip = 1;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 3){ // 3 slip system, real value
+    slip = 2;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  if(flag == 4){ // 4 slip system, real value
+    slip = 3;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 5){ // 5 slip system, real value
+    slip = 4;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  else if(flag == 6){ // 6 slip system, real value
+    slip = 5;
+    na = i*N2*N3 + j*N3 + k + slip*lN1*N2*N3;
+  }
+  return fft->E_ext[na];
+  // return fft->tau[slip];
+  // return ext_ave_det;
+}
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_stress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pyz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_sigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_astress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_asigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_tstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_tsigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_pstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_psigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes unitary stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_ustress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_usigma[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes unitary stress in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_rstress(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_rsigma[na];
+}
+
+double App6SFCC::compute_stress_NoExt(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // pxx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // pyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // pzz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // pxy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // pxz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // pyz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_sigma_NoExt[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes theta in a given point and slip system
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_theta(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+
+  return fft->theta[na];
+}
+
+/* ----------------------------------------------------------------------
+   returns local USFE
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_usfe(int n, int flag)
+{
+  int N1 = fft->nx;
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  // slip = flag - 1;
+  // na = (lxs+i)*N2*N3 + j*N3 + k + slip*N1*N2*N3;
+
+  // return fft->material->A_mpea[na];
+
+  na = (flag*N1*N2*N3 + (lxs+i)*N2*N3 + j*N3 + k + slip*7*N1*N2*N3);
+  // if (me == 0) printf("fcc7_mpea: %f\n",)
+  return fft->material->fcc7_mpea[na];
+}
+
+/* ----------------------------------------------------------------------
+   returns phase
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_phase(int n, int flag)
+{
+  int N1 = fft->nx;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  na = i*N2*N3 + j*N3 + k;
+
+  return fft->phase[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the strain in a given point
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_strain(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // exx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // eyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // ezz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // exy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_eps[na];
+}
+
+double App6SFCC::compute_istrain(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int ND = dimension;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1)  // exx
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 0*lN1*N2*N3*ND);
+  else if(flag == 2)  // eyy
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 3)  // ezz
+    na = 2*(i*N2*N3 + j*N3 + k + 2*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 4)  // exy
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 1*lN1*N2*N3*ND);
+  else if(flag == 5)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 0*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+  else if(flag == 6)  // exz
+    na = 2*(i*N2*N3 + j*N3 + k + 1*lN1*N2*N3 + 2*lN1*N2*N3*ND);
+
+  return fft->data_ieps[na];
+}
+
+/* ----------------------------------------------------------------------
+   computes the xo in a given point and slip system
+   ------------------------------------------------------------------------- */
+double App6SFCC::compute_xo(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 2){ // 2 slip system, real value
+    slip = 1;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 3){ // 3 slip system, real value
+    slip = 2;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  if(flag == 4){ // 4 slip system, real value
+    slip = 3;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 5){ // 5 slip system, real value
+    slip = 4;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 6){ // 6 slip system, real value
+    slip = 5;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  
+  return fft->xo[na];
+}
+/* ----------------------------------------------------------------------
+   computes nhn in a given point and slip system
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_nhn(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NP = fft->num_planes;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  else if(flag == 2){ // 2 slip system, real value
+    slip = 1;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+
+  return fft->nhn_d[na]; // change for one order parameter case
+}
+/* ----------------------------------------------------------------------
+   computes picked in a given point and slip system
+   ------------------------------------------------------------------------- */
+
+double App6SFCC::compute_picked(int n, int flag)
+{
+  int lN1 = fft->local_x;
+  int lxs = fft->local_x_start;
+  int N2 = fft->local_y;
+  int N3 = fft->local_z;
+  int NS = fft->slip_systems;
+  int slip = 0;
+  int na=-1;
+
+  int i=siteijk[n][0] - lxs;
+  int j=siteijk[n][1];
+  int k=siteijk[n][2];
+
+  if(flag == 1){ // 1 slip system, real value
+    slip = 0;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+  if(flag == 2){ // 2 slip system, real value
+    slip = 0;
+    na = (i*N2*N3 + j*N3 + k + slip*lN1*N2*N3);
+  }
+
+  return fft->picked_d[na]; //also change this for 3 order parameter case
+}
+/* ----------------------------------------------------------------------
+   print stats
+------------------------------------------------------------------------- */
+
+void App6SFCC::stats(char *strtmp)
+{
+  char *strpnt = strtmp;
+  sprintf(strpnt," %10g %10d",time,steps);
+  strpnt += strlen(strpnt);
+
+  // for (int m = 0; m < nspecies; m++) {
+  //   sprintf(strpnt," %d",pcount[m]);
+  //   strpnt += strlen(strpnt);
+  // }
+}
+
+/* ----------------------------------------------------------------------
+   print stats header
+------------------------------------------------------------------------- */
+
+void App6SFCC::stats_header(char *strtmp)
+{
+  char *strpnt = strtmp;
+  sprintf(strpnt," %10s %10s","Time","Step");
+  strpnt += strlen(strpnt);
+
+  // for (int m = 0; m < nspecies; m++) {
+  //   sprintf(strpnt," %s",sname[m]);
+  //   strpnt += strlen(strpnt);
+  // }
+}

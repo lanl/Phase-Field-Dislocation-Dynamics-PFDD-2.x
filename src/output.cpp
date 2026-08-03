@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -136,7 +127,7 @@ double Output::compute(double time, int done)
 
   comp_stress = 0;
   comp_strain = 0;
-
+  comp_energy = 0;
   double dump_time = app->stoptime;
   for (int i = 0; i < ndump; i++) {
     if (time >= dumplist[i]->next_time || done) {
@@ -162,8 +153,8 @@ double Output::compute(double time, int done)
     } else if (time >= diaglist[i]->next_time) {
       diaglist[i]->compute();
       diaglist[i]->next_time =
-	next_time(time,diaglist[i]->logfreq,diaglist[i]->delta,
-		  diaglist[i]->nrepeat,diaglist[i]->scale,diaglist[i]->delay);
+	    next_time(time,diaglist[i]->logfreq,diaglist[i]->delta,
+		    diaglist[i]->nrepeat,diaglist[i]->scale,diaglist[i]->delay);
       diag_time = MIN(diag_time,diaglist[i]->next_time);
     } else diag_time = MIN(diag_time,diaglist[i]->next_time);
   }
@@ -351,6 +342,14 @@ void Output::stats(int timeflag)
       fprintf(logfile,"%s\n",str);
       fflush(logfile);
     }
+    if (iterfile) {
+      fprintf(iterfile,"%s\n",str);
+      fflush(iterfile);
+    }
+    if (avgfile) {
+      fprintf(avgfile,"%s\n",str);
+      fflush(avgfile);
+    }
   }
 }
 
@@ -377,6 +376,14 @@ void Output::stats_header()
 
   if (me == 0) {
     if (screen) fprintf(screen,"%s\n",str);
+    if (logfile) {
+      fprintf(logfile,"%s\n",str);
+      fflush(logfile);
+    }
+    if (logfile) {
+      fprintf(logfile,"%s\n",str);
+      fflush(logfile);
+    }
     if (logfile) {
       fprintf(logfile,"%s\n",str);
       fflush(logfile);

@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #ifndef PFDD_APP_H
@@ -31,6 +22,7 @@ class App : protected Pointers {
   int appclass;           // one of the enum values
   char *style;            // style name of app
   double time;            // current simulation time due to executed events
+  double kmctime;
   double stoptime;        // time at which to stop this run
   int steps;              // # of steps to run
   int stopsteps;              // # of steps to run
@@ -40,11 +32,17 @@ class App : protected Pointers {
   double timestep;        // timestep
   int core_flag;        // Flag for the core energy model: 1 perfect, 2 extended, 3
   int setup_flag;         //Flag for initial dislocation setup
+  int phase_flag;       //Flag for different phases/materials
+  int dflag;            //Flag for needing disregistry evolution (FCC)
+  int tflag;            //Flag for twin (Coherent Sigma3 {111} CTB)
+  int xstop;            // Flag to stop stress after cross slip (SFW calc on cross slip plane)
   int dimension;        // Dimensionality of the calculation
   double nextoutput;
   int non_Schmid;                      // null for Schmid calculation (default)
   double angle_to_110, w1,w2,w3;        //MRSSP angle, non-Schmid coefficient
 
+  int nphase;
+  int gbe_flag;         //Flag for the grain boundary energy: 0 none 1 proportional to core energy
   // owned + ghost sites
 
   tagint nglobal;              // global # of sites
@@ -80,6 +78,19 @@ class App : protected Pointers {
 
   // Probably I'll need a Material Class
 
+  int NE;                       // # of events for KMC
+  double beta;                  // 1/(T*kappa)
+  //int *event_cond;              // if the event condition is met
+  double *event_time;           // time of the event occurs
+  //double cur_time;              // current time according to # of step * timestep
+  int kflag;                    // flag of the event that will be performed
+  double *pre_fac;
+  double *E_act;
+  double ***vol_ac;
+  double *rate;
+  double *stress_dependence; // stress dependence turned on as means of facilitation if == 1
+  double dt_glide_avg,dt_glide_min,dt_xslip_avg,dt_xslip_min;
+
   class CommLattice *comm;
   class RandomPark *ranapp;    // RN generator for KMC and rejection KMC
   class RandomPark *ranstrict; // RN generator for per-site strict rKMC
@@ -114,6 +125,13 @@ class App : protected Pointers {
 
   // virtual functions, may be overridden by child class
 
+  virtual void events() {};
+  virtual void events_glide() {};
+  virtual void events_xslip() {};
+  virtual void events_stop() {};
+  virtual void events_skip() {};
+  virtual void barrier(int, int, int) {};
+
   virtual void input_app(char *, int, char **) {};
   virtual void init_app() {};
   virtual void setup_app() {};
@@ -125,12 +143,38 @@ class App : protected Pointers {
   virtual void core_energy();
   virtual void resolSS();
   virtual double compute_mean_xi(int, int) {return 0;}
+  virtual double compute_mean_dreg(int, int) {return 0;}
+  virtual double compute_mean_dregp(int, int) {return 0;}
+  virtual double compute_mean_intE(int, int) {return 0;}
+  virtual double compute_mean_extE(int, int) {return 0;}
+  virtual double compute_mean_latE(int, int) {return 0;}
+  virtual double compute_stress_NoExt(int, int) {return 0;}
+  virtual double compute_data_real(int, int) {return 0;}
+  virtual double compute_ff1(int, int) {return 0;}
+
   virtual double compute_stress(int, int) {return 0;}
+  virtual double compute_astress(int, int) {return 0;}
+  virtual double compute_tstress(int, int) {return 0;}
+  virtual double compute_pstress(int, int) {return 0;}
+  virtual double compute_ustress(int, int) {return 0;}
+  virtual double compute_rstress(int, int) {return 0;}
   virtual double compute_strain(int, int) {return 0;}
   virtual double compute_theta(int, int) {return 0;}
   virtual double compute_usfe(int, int) {return 0;}
+  virtual double compute_nhn(int, int) {return 0;}
+  virtual double compute_picked(int, int) {return 0;}
+  virtual double compute_dtkmc(int, int) {return 0;}
+  virtual double compute_gradx(int, int) {return 0;}
+  virtual double compute_grady(int, int) {return 0;}
+  virtual double compute_gradz(int, int) {return 0;}
+  virtual double compute_xo(int, int) {return 0;}
+  virtual double compute_phase(int, int) {return 0;}
+
   virtual double compute_delta(int, int) {return 0;}
   virtual double compute_ddelta(int, int) {return 0;}
+  virtual void gb_energy();
+
+  virtual double compute_istrain(int, int) {return 0;}
 
   App(class PFDD_C *, int, char **);
   virtual ~App();

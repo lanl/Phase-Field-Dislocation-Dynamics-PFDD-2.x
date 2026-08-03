@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #ifdef DUMP_CLASS
@@ -57,6 +48,7 @@ class DumpText : public Dump {
 
   int stress_flag;           // 1 if stress to be computed
   int strain_flag;           // 1 if strain to be computed
+  int energy_flag;           // 1 if energy to be computed
 
   // private methods
 
@@ -85,18 +77,39 @@ class DumpText : public Dump {
   void pack_x(int);
   void pack_y(int);
   void pack_z(int);
+  void pack_xa(int);
+  void pack_ya(int);
+  void pack_za(int);
+  void pack_i(int);
+  void pack_j(int);
+  void pack_k(int);
   void pack_theta(int); //Grad
   void pack_usfe1(int);
   void pack_usfe2(int);
   void pack_usfe3(int);
   void pack_delta(int); // projected order paramter
   void pack_ddelta(int); // gradient of delta
+  void pack_nhn1(int);
+  void pack_nhn2(int);
+  void pack_picked_1(int);
+  void pack_picked_2(int);
+  void pack_dtkmc1(int);
+  void pack_dtkmc2(int);
+  void pack_gradx(int);
+  void pack_grady(int);
+  void pack_gradz(int);
   void pack_pxx(int);
   void pack_pyy(int);
   void pack_pzz(int);
   void pack_pxy(int);
   void pack_pxz(int);
   void pack_pyz(int);
+  void pack_pxx_NoExt(int);
+  void pack_pyy_NoExt(int);
+  void pack_pzz_NoExt(int);
+  void pack_pxy_NoExt(int);
+  void pack_pxz_NoExt(int);
+  void pack_pyz_NoExt(int);
   void pack_exx(int);
   void pack_eyy(int);
   void pack_ezz(int);
@@ -128,10 +141,87 @@ class DumpText : public Dump {
   void pack_xii11(int);
   void pack_xir12(int);
   void pack_xii12(int);
+  void pack_xo1(int);
+  void pack_xo2(int);
+  void pack_xo3(int);
+  void pack_xo4(int);
+  void pack_xo5(int);
+  void pack_xo6(int);
+  void pack_dreg1(int);
+  void pack_dreg2(int);
+  void pack_dregp1_1(int);
+  void pack_dregp1_2(int);
+  void pack_dregp2_1(int);
+  void pack_dregp2_2(int);
+  void pack_int1(int);
+  void pack_int2(int);
+  void pack_int3(int);
+  void pack_int4(int);
+  void pack_int5(int);
+  void pack_int6(int);
+  void pack_ext1(int);
+  void pack_ext2(int);
+  void pack_ext3(int);
+  void pack_ext4(int);
+  void pack_ext5(int);
+  void pack_ext6(int);
+  void pack_lat1(int);
+  void pack_lat2(int);
+  void pack_lat3(int);
+  void pack_lat4(int);
+  void pack_lat5(int);
+  void pack_lat6(int);
+  void pack_data_real_1(int);
+  void pack_ff1_xx(int);
+  void pack_ff1_xy(int);
+  void pack_ff1_xz(int);
+  void pack_ff1_yy(int);
+  void pack_ff1_yz(int);
+  void pack_ff1_zz(int);
+    void pack_usfe(int);
 
   void pack_energy(int);
   void pack_iarray(int);
   void pack_darray(int);
+
+  void pack_iexx(int);
+  void pack_ieyy(int);
+  void pack_iezz(int);
+  void pack_iexy(int);
+  void pack_iexz(int);
+  void pack_ieyz(int);
+
+  void pack_apxx(int);
+  void pack_apyy(int);
+  void pack_apzz(int);
+  void pack_apxy(int);
+  void pack_apxz(int);
+  void pack_apyz(int);
+  void pack_tpxx(int);
+  void pack_tpyy(int);
+  void pack_tpzz(int);
+  void pack_tpxy(int);
+  void pack_tpxz(int);
+  void pack_tpyz(int);
+  void pack_ppxx(int);
+  void pack_ppyy(int);
+  void pack_ppzz(int);
+  void pack_ppxy(int);
+  void pack_ppxz(int);
+  void pack_ppyz(int);
+  void pack_upxx(int);
+  void pack_upyy(int);
+  void pack_upzz(int);
+  void pack_upxy(int);
+  void pack_upxz(int);
+  void pack_upyz(int);
+  void pack_rpxx(int);
+  void pack_rpyy(int);
+  void pack_rpzz(int);
+  void pack_rpxy(int);
+  void pack_rpxz(int);
+  void pack_rpyz(int);
+  void pack_phase(int);
 };
 
 }

@@ -95,30 +95,30 @@ void SolveGLCond::iterate()
       //
       // Application specific fft forward
       fft->prep_forward();
-      fft->forwardcond();
+      //~ fft->forwardcond();
 
       //Compute optimal xi from fft
       fft->internal_energy();
       
       //Compute divergence of electric current
-      fft->divcurrent();
+      //~ fft->divcurrent();
 
       // Take inverse FFT
       fft->prep_backward();
-      fft->backwardcond();
+      //~ fft->backwardcond();
       printf("\nconductivity_local: %f \n", double(nprocs)*fft->conductivity);
       if (me == 0) printf("\nconductivity: %f \n", fft->conductivity_global);
 
       // Update Order Parameters
       fft->update_order_parameter();
-      fft->update_conduct_order_param();
+      //~ fft->update_conduct_order_param();
 
       if (app->time >= app->nextoutput)
 	app->nextoutput = output->compute(app->time,0);
       timer->stamp(TIME_OUTPUT);
 
       fft->prepare_next_itr();
-      fft->prepare_next_conditr();
+      //~ fft->prepare_next_conditr();
 
       //compute delta, ddelta
       if(app->non_Schmid)
@@ -131,7 +131,7 @@ void SolveGLCond::iterate()
       // Exit if converge
       if(fft->xinorm < tol && fft->condxinorm < 1.e-13*tol)
       fft->prep_backward();
-      fft->backwardcond();
+      //~ fft->backwardcond();
       printf("\nconductivity_local: %f \n", double(nprocs)*fft->conductivity);
       if (me == 0) printf("\nconductivity: %f \n", fft->conductivity_global);
 	break;

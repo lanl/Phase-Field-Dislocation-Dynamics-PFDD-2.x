@@ -1,18 +1,10 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 #include "math.h"
+#include "mpi.h"
 #include "string.h"
 #include "stdlib.h"
 #include "app.h"
@@ -43,8 +35,11 @@ App::App(PFDD_C *pfdd_p, int narg, char **arg) : Pointers(pfdd_p)
 
   appclass = LATTICE;
   time = 0.0;
+  kmctime = 0.0;
   first_run = 1;
   dimension = 3;
+
+  nphase = 1; //default to 1 phase
 
   MPI_Comm_rank(world,&me);
   MPI_Comm_size(world,&nprocs);
@@ -74,6 +69,10 @@ App::App(PFDD_C *pfdd_p, int narg, char **arg) : Pointers(pfdd_p)
 
   core_flag = -1;
   setup_flag = -1;
+  gbe_flag = -1;
+  phase_flag = -1;
+  dflag = -1;
+  kflag = -1;
   int iarg = 1;
   while (iarg < narg) {
     if (strcmp(arg[iarg],"core_energy") == 0) {
@@ -81,9 +80,20 @@ App::App(PFDD_C *pfdd_p, int narg, char **arg) : Pointers(pfdd_p)
       core_flag = atoi(arg[iarg]);
       iarg += 1;
     }
+    else if (strcmp(arg[iarg],"numphase") == 0) {
+      iarg += 1;
+      nphase = atoi(arg[iarg]);
+      phase_flag = 1;
+      iarg += 1;
+    }
     else if (strcmp(arg[iarg],"setup") == 0) {
       iarg += 1;
       set_initial_sxtal(arg[iarg]);
+      iarg += 1;
+    }
+    else if (strcmp(arg[iarg],"gb_energy") == 0) {
+      iarg += 1;
+      gbe_flag = atoi(arg[iarg]);
       iarg += 1;
     }
   }
@@ -669,6 +679,30 @@ void App::core_energy()
   else if(core_flag == 5) fft->core_energy_bcc_perfect();
   else if(core_flag == 6) fft->core_energy_USFE_angle_tau();  //added_HJ
   else if(core_flag == 7) fft->core_energy_mpea(); //added LTWS
+  else if(core_flag == 8) fft->core_energy_lup1D(); //added IPW
+  else if(core_flag == 9) fft->core_energy_lup2D(); //added IPW
+  else if(core_flag == 10) fft->core_energy_extended11(); //added IPW
+  else if(core_flag == 11) fft->core_energy_extended_test(); //added IPW from 10.1038/s41524-018-0075-x
+  else if(core_flag == 12) fft->core_energy_extended_Ag(); // Multishifter Ag 10.1088/1361-651X/ade31f
+  else if(core_flag == 13) fft->core_energy_extended_Au(); // Multishifter Au 10.1088/1361-651X/ade31f
+  else if(core_flag == 14) fft->core_energy_extended_Cu(); // Multishifter Cu 10.1088/1361-651X/ade31f
+  else if(core_flag == 15) fft->core_energy_extended_Ir(); // Multishifter Ir 10.1088/1361-651X/ade31f
+  else if(core_flag == 16) fft->core_energy_extended_Ni(); // Multishifter Ni 10.1088/1361-651X/ade31f
+  else if(core_flag == 17) fft->core_energy_extended_Pd(); // Multishifter Pd 10.1088/1361-651X/ade31f
+  else if(core_flag == 18) fft->core_energy_extended_Pt(); // Multishifter Pt 10.1088/1361-651X/ade31f
+  else if(core_flag == 19) fft->core_energy_extended_Rh(); // Multishifter Rh 10.1088/1361-651X/ade31f
+  else if(core_flag == 20) fft->core_energy_extended_2Px(); //extended for 2 phases
+  else if(core_flag == 21) fft->core_energy_extended_Cu_gbtest(); // Multishifter Cu with Twin Boundary testing (10/10/24)
+}
+
+/* -----------------------------------------------------------------------
+   Chooses grain boundary energy
+   ---------------------------------------------------------------------*/
+void App::gb_energy()
+{
+  if(gbe_flag == 0) fft->no_gb_energy();
+  if(gbe_flag == 1) fft->gb_energy_proportional();
+  else if(gbe_flag == 2) fft->gb_energy_extended();
 }
 
 /* ----------------------------------------------------------------------
@@ -841,6 +875,22 @@ void App::set_initial_sxtal(char *str)
       setup_flag = 14;
   else if (strcmp(str,"3D3ShcpBasal") == 0)
       setup_flag = 15;
+  else if (strcmp(str,"SxtalCubicFCCEdge") == 0)
+      setup_flag = 16;
+  else if (strcmp(str,"SxtalCubicFCCScrew") == 0)
+      setup_flag = 17;
+  else if (strcmp(str,"screwp") == 0)
+      setup_flag = 18;
+  else if (strcmp(str,"screwpk") == 0)
+      setup_flag = 19;
+  else if (strcmp(str,"screwGP") == 0)
+      setup_flag = 20;
+  else if (strcmp(str,"screwp3") == 0)
+      setup_flag = 21;
+  else if (strcmp(str,"screwp6Obs") == 0)
+      setup_flag = 22;
+  else if (strcmp(str,"screwp6ObsInf") == 0)
+      setup_flag = 23;
   else
     error->all(FLERR,"Illegal setup command");
 }
@@ -880,6 +930,22 @@ void App::initial_sxtal()
     fft->initial_sxtal_3D3ShcpNotch();
   else if (setup_flag == 15)
     fft->initial_sxtal_3D3ShcpBasal();
+  else if (setup_flag == 16)
+    fft->initial_sxtal_cubic_fcc_edge();
+  else if (setup_flag == 17)
+    fft->initial_sxtal_cubic_fcc_screw();
+  else if (setup_flag == 18)
+    fft->initial_sxtal_6SFCCPlanar();
+  else if (setup_flag == 19)
+    fft->initial_sxtal_6SFCCPlanarKink();
+  else if (setup_flag == 20)
+    fft->initial_sxtal_6SFCCGPZone();
+  else if (setup_flag == 21)
+    fft->initial_sxtal_3SFCCPlanar();
+  else if (setup_flag == 22)
+    fft->initial_sxtal_6SFCCPlanar_Obs();
+  else if (setup_flag == 23)
+    fft->initial_sxtal_6SFCCPlanar_ObsInf();
   else
     error->all(FLERR,"Illegal setup command");
 }

@@ -1,0 +1,17 @@
+# Compiles Object files
+*.o
+pfdd_openmpi
+
+# Directory with compiled objects
+Obj_openmpi*
+
+#style files
+style_*.h
+
+# other
+*.html
+*.pfdd
+*.dump
+*.bak
+__pycache__
+.DS_Store

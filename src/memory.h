@@ -1,16 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
    ------------------------------------------------------------------------- */
 
 #ifndef PFDD_MEMORY_H
@@ -506,6 +497,82 @@ namespace PFDD_NS {
     }
 
     /* ----------------------------------------------------------------------
+       create a 6d array
+       ------------------------------------------------------------------------- */
+
+    template <typename TYPE>
+    TYPE ******create(TYPE ******&array, int n1, int n2, int n3, int n4, 
+                      int n5, int n6, const char *name)
+    {
+      bigint nbytes = ((bigint) sizeof(TYPE)) * n1*n2*n3*n4*n5*n6;
+      TYPE *data = (TYPE *) smalloc(nbytes,name);
+      nbytes = ((bigint) sizeof(TYPE *)) * n1*n2*n3*n4*n5;
+      TYPE **level5 = (TYPE **) smalloc(nbytes,name);
+      nbytes = ((bigint) sizeof(TYPE **)) * n1*n2*n3*n4;
+      TYPE ***level4 = (TYPE ***) smalloc(nbytes,name);
+      nbytes = ((bigint) sizeof(TYPE ***)) * n1*n2*n3;
+      TYPE ****level3 = (TYPE ****) smalloc(nbytes,name);
+      nbytes = ((bigint) sizeof(TYPE ****)) * n1*n2;
+      TYPE *****level2 = (TYPE *****) smalloc(nbytes,name);
+      nbytes = ((bigint) sizeof(TYPE *****)) * n1;
+      array = (TYPE ******) smalloc(nbytes,name);
+
+      int i,j,k,l,m;
+      bigint m1,m2,m3,m4,m5,m6,m7;
+      bigint n = 0;
+      for (i = 0; i < n1; i++) {
+        m2 = ((bigint) i) * n2;
+        array[i] = &level2[m2];
+        for (j = 0; j < n2; j++) {
+          m1 = ((bigint) i) * n2 + j;
+          m2 = ((bigint) i) * n2*n3 +  ((bigint) j) * n3;
+          level2[m1] = &level3[m2];
+          for (k = 0; k < n3; k++) {
+            m1 = ((bigint) i) * n2*n3 + ((bigint) j) * n3 + k;
+            m2 = ((bigint) i) * n2*n3*n4 + 
+              ((bigint) j) * n3*n4 + ((bigint) k) * n4;
+            level3[m1] = &level4[m2];
+            for (l = 0; l < n4; l++) {
+              m1 = ((bigint) i) * n2*n3*n4 +
+                ((bigint) j) * n3*n4 + ((bigint) k) * n4 + l;
+              m2 = ((bigint) i) * n2*n3*n4*n5 +
+                ((bigint) j) * n3*n4*n5 + ((bigint) k) * n4*n5 + ((bigint) l) * n5;
+              level4[m1] = &level5[m2];
+              for(m = 0; m < n5; m++) {
+              m1 = ((bigint) i) * n2*n3*n4*n5 +
+                ((bigint) j) * n3*n4*n5 + ((bigint) k) * n4*n5 + ((bigint) l) * n5 + m;
+              level5[m1] = &data[n];
+              n += n6;
+              }
+            }
+          }
+        }
+      }
+      return array;
+    }
+
+    template <typename TYPE>
+    TYPE *******create(TYPE *******&array, int n1, int n2, int n3, int n4,
+                      int n5, int n6, const char *name)
+    {fail(name);}
+
+    /* ----------------------------------------------------------------------
+       destroy a 6d array
+       ------------------------------------------------------------------------- */
+
+    template <typename TYPE>
+    void destroy(TYPE ******array)
+    {
+      if (array == NULL) return;
+      sfree(array[0][0][0][0][0]);
+      sfree(array[0][0][0][0]);
+      sfree(array[0][0][0]);
+      sfree(array[0][0]);
+      sfree(array[0]);
+      sfree(array);
+    }
+
+    /* ----------------------------------------------------------------------
        memory usage of arrays, including pointers
        ------------------------------------------------------------------------- */
 
@@ -540,6 +607,17 @@ namespace PFDD_NS {
       bytes += ((bigint) sizeof(TYPE *)) * n1*n2*n3;
       bytes += ((bigint) sizeof(TYPE **)) * n1*n2;
       bytes += ((bigint) sizeof(TYPE ***)) * n1;
+      return bytes;
+    }
+
+    template <typename TYPE>
+    bigint usage(TYPE *****array, int n1, int n2, int n3, int n4, int n5)
+    {
+      bigint bytes = ((bigint) sizeof(TYPE)) * n1*n2*n3*n4*n5;
+      bytes += ((bigint) sizeof(TYPE *)) * n1*n2*n3*n4;
+      bytes += ((bigint) sizeof(TYPE **)) * n1*n2*n3;
+      bytes += ((bigint) sizeof(TYPE ***)) * n1*n2;
+      bytes += ((bigint) sizeof(TYPE ****)) * n1;
       return bytes;
     }
   };

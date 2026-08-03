@@ -17,6 +17,8 @@ to reproduce, prepare derivative works, distribute copies to the public, perform
 #define PFDD_MATERIAL_H
 
 #include "pointers.h"
+#include "fft.h"
+#include "dfftw_mpi.h"
 
 namespace PFDD_NS {
 
@@ -24,22 +26,46 @@ namespace PFDD_NS {
   public:
     char *style;                           // enum list of NONE,Al, Cu,etc
 
+    int aflag;                 // Aniso if ani = 0 iso if ani > 0
+
     double a;                    // lattice parameter
     double mu;                   // shear modulus
     double young;                // young modulus
     double xnu;                  // check???
+    double ll;
 
-    double c0,c1,c2,c3,c4,a1,a3; // parameters for the gamma surface
+    double c0,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,a1,a3; // parameters for the gamma surface
     double isf,usf;              // intrinsic and unstable stacking fault energies
     double An,Cn;
-    double *A_mpea;            //variable An for an MPEA
+    double omul;
+    double *A_mpea;               //variable An for an MPEA
+    double *fcc7_mpea;
+    int Nx_lup, Ny_lup;         //dimensions for GSFE lookup
+    double *sfe_dx, *sfe_dy;      //Derivativesfor GSFE lookup
     double aa0,aa1,aa2,aa3,aa4,bb1,bb2,bb3,bb4; // parameters for the hcp pyramidal2 gamma surface
 
-    double C44,nu,C12,C11,ll;    // Elastic constants
-    double S11,S12,S44;          // stiffness
+    double *Hv, *Pv; // parametrization of activation energies / prefactors along interface line
+    double *Hvg, *Hvx;
+    double *Pvg, *Pvx;
 
-    double b;                    // Burgers vector
-    double dslip;                // interplanar distance
+    double C44,C12,C11;           // Elastic constants
+    double S11,S12,S44;           // stiffness
+
+    double C22,C33,C55,C66,C13,C14,C15,C16,C23,C24,C25,C26,C34,C35,C36,C45,C46,C56; // Elastic constants
+
+    double b;                     // Burgers vector
+    double dslip;                 // interplanar distance
+
+    double error_tol;             // Tolerance for iterative algorithm
+    int rflag;                    // Reference flag, 1=Matrix, 2=0.5*( min(C_ijkli) + max(C_ijkli) ) 3=1/V \int C_ijkl dV
+    double pbef;                  // Peierls barrier factor for the inclusion
+    double gbe;                  // Grain boundary energy for the inclusion
+    double gbef;                  // Grain boundary energy factor for the inclusion
+
+    int geometry;                 // Type of greomtry if inclusion
+    double x0, y0, z0;            // Center of the geometry
+    double xl, yl, zl;            // lengts
+    double sqp1, sqp2;            // square parameters for a superellipsoid
 
     double condsigma; // conductivity (TODO: make this a tensor)
     double alpha_resistivity = 0; // change in electrical resistivity per degree Kelvin above 300K (but close to it)
@@ -55,14 +81,17 @@ namespace PFDD_NS {
     double beta_disloc = 0; // electric resitivity per unit dislocation density
     double rho_disloc = 0; // dislocation density, read from input file for now, 
     // but will eventually be automatically determined from the dislocations placed in the simulation box (TODO)
-    
+   
     double a_slope,a_b,b_b,c_slope,c_b; // paramters to determine USFE(X,tau)
-    Material(class PFDD_C *, int, char **, int, int, int, int);
+    Material(class PFDD_C *, int, char **, int, int, int, int, int);
     ~Material();
 
   private:
     void set_constants(const char *);
+    void read_activation_file(const char *);
     void read_mpea_file(const char *,int N1, int N2, int N3, int NS);
+    void read_gsfe_file(const char *);
+    void compute_gsfe_derivatives(int Nx, int Ny, double *gsfe);
   };
 
 }

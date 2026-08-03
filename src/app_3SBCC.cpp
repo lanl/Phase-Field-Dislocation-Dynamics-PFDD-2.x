@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
    ------------------------------------------------------------------------- */
 
 #include "math.h"
@@ -40,7 +31,7 @@ App3SBCC::App3SBCC(PFDD_C *pfdd_p, int narg, char **arg) :
   oflag = 1;
 
   if(setup_flag == -1)
-    setup_flag = 3; //default to a screw dipole
+    setup_flag = 0; //default to a loop
   if(core_flag == -1)
     core_flag = 1; //default to sin^2
 

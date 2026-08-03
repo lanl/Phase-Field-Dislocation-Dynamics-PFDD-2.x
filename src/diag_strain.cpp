@@ -1,16 +1,7 @@
 /* ----------------------------------------------------------------------
 PFDD -- Phase Field Dislocation Dynamics
 
-© 2022. Triad National Security, LLC. All rights reserved.
-This program was produced under U.S. Government contract 89233218CNA000001 for
-Los Alamos National Laboratory (LANL), which is operated by Triad National
-Security, LLC for the U.S. Department of Energy/National Nuclear Security
-Administration. All rights in the program are reserved by Triad National
-Security, LLC, and the U.S. Department of Energy/National Nuclear Security
-Administration. The Government is granted for itself and others acting on its
-behalf a nonexclusive, paid-up, irrevocable worldwide license in this material 
-to reproduce, prepare derivative works, distribute copies to the public, perform
- publicly and display publicly, and to permit others to do so.
+Copyright 2021 Los Alamos National Laboratory. See LICENSE.md
 ------------------------------------------------------------------------- */
 
 #include "mpi.h"
@@ -47,11 +38,14 @@ void DiagStrain::compute()
   if(!output->comp_strain){
     for(int i=0;i<ND;i++){
       for(int j=0;j<ND;j++){
-	fft->avepst[i][j] = 0.0;
-	fft->avepsts[i][j] = 0.0;
-	fft->avepsd[i][j] = 0.0;
-	fft->aveps[i][j] = 0.0;
-	fft->ave_eps[i][j] = 0.0;
+        fft->avepst[i][j] = 0.0;
+        fft->avepsts[i][j] = 0.0;
+        fft->avepsd[i][j] = 0.0;
+        fft->aveps[i][j] = 0.0;
+        fft->ave_eps[i][j] = 0.0;
+        fft->aveps_NoExt[i][j] = 0.0;
+        fft->ave_eps_NoExt[i][j] = 0.0;
+        if (app->nphase>1) {fft->aveVs[i][j] = 0.0;}
       }
     }
     fft->strain();
@@ -64,13 +58,13 @@ void DiagStrain::compute()
 
 void DiagStrain::stats(char *strtmp)
 {
-  sprintf(strtmp," %8g %8g %8g %8g %8g %8g",fft->ave_eps[0][0],fft->ave_eps[1][1],fft->ave_eps[2][2],
-	  fft->ave_eps[0][1],fft->ave_eps[0][2],fft->ave_eps[1][2]);
+  sprintf(strtmp," %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g %8g",fft->ave_eps[0][0],fft->ave_eps[1][1],fft->ave_eps[2][2],fft->ave_eps[0][1],fft->ave_eps[0][2],fft->ave_eps[1][2],
+  fft->ave_eps_NoExt[0][0],fft->ave_eps_NoExt[1][1],fft->ave_eps_NoExt[2][2],fft->ave_eps_NoExt[0][1],fft->ave_eps_NoExt[0][2],fft->ave_eps_NoExt[1][2]);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void DiagStrain::stats_header(char *strtmp)
 {
-  sprintf(strtmp," %8s %8s %8s %8s %8s %8s","e11","e22","e33","e12","e13","e23");
+  sprintf(strtmp," %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s %8s","e11","e22","e33","e12","e13","e23","e11NE","e22NE","e33NE","e12NE","e13NE","e23NE");
 }
